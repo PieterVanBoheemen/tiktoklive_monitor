@@ -9,6 +9,7 @@ import platform
 import resource
 import subprocess
 from pathlib import Path
+from typing import Dict, Any  # ← ADD THIS MISSING IMPORT
 
 
 def setup_platform_specific():

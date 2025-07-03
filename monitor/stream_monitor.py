@@ -9,7 +9,7 @@ import platform
 from datetime import datetime
 from typing import Dict, List, TYPE_CHECKING
 
-from .signal_handler import GracefulShutdownHandler
+from config.signal_handler import GracefulShutdownHandler
 from .stream_checker import StreamChecker
 from .stability_tracker import StabilityTracker
 from recording.stream_recorder import StreamRecorder
