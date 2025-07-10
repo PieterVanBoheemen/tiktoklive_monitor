@@ -54,7 +54,7 @@ class StreamChecker:
             except asyncio.TimeoutError:
                 if attempt < max_retries:
                     self.logger.debug(f"⏱️ Timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
-                    await asyncio.sleep(3 + attempt)  # Progressive backoff
+                    await asyncio.sleep(0.5)  # Minimal delay for retry
                     continue
                 else:
                     self.logger.debug(f"⏱️ Final timeout checking {username} after {max_retries + 1} attempts")
@@ -62,7 +62,7 @@ class StreamChecker:
             except Exception as e:
                 if attempt < max_retries:
                     self.logger.debug(f"⚠️ Error checking {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
-                    await asyncio.sleep(3 + attempt)  # Progressive backoff
+                    await asyncio.sleep(0.5)  # Minimal delay for retry
                     continue
                 else:
                     self.logger.debug(f"❌ Final error checking {username}: {e}")
@@ -71,8 +71,9 @@ class StreamChecker:
         return False
 
     async def check_all_streamers_parallel(self, enabled_streamers: Dict[str, dict]) -> Dict[str, bool]:
-        """Check all streamers in parallel with improved error handling"""
+        """Check all streamers in parallel with batch processing for improved performance"""
         timeout = self.config_manager.config['settings'].get('individual_check_timeout', 20)
+        batch_size = self.config_manager.config['settings'].get('batch_size', 50)
 
         async def check_single_streamer_with_timeout(streamer_key: str, streamer_config: dict):
             username = streamer_config['username']
@@ -90,32 +91,49 @@ class StreamChecker:
                 self.logger.debug(f"Error in parallel check for {username}: {e}")
                 return username, False
 
-        # Create tasks for all streamers
-        tasks = [
-            check_single_streamer_with_timeout(streamer_key, streamer_config)
-            for streamer_key, streamer_config in enabled_streamers.items()
-        ]
-
+        # Split streamers into batches
+        streamer_items = list(enabled_streamers.items())
+        total_streamers = len(streamer_items)
         live_status = {}
 
-        try:
-            # Run all tasks in parallel
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+        self.logger.info(f"🔄 Processing {total_streamers} streamers in batches of {batch_size}")
 
-            # Process results
-            for result in results:
-                if isinstance(result, tuple):
-                    username, is_live = result
-                    live_status[username] = is_live
-                elif isinstance(result, Exception):
-                    self.logger.debug(f"Task exception: {result}")
+        for i in range(0, total_streamers, batch_size):
+            batch = streamer_items[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (total_streamers + batch_size - 1) // batch_size
+            
+            self.logger.info(f"📦 Processing batch {batch_num}/{total_batches} ({len(batch)} streamers)")
 
-            return live_status
+            # Create tasks for current batch
+            tasks = [
+                check_single_streamer_with_timeout(streamer_key, streamer_config)
+                for streamer_key, streamer_config in batch
+            ]
 
-        except Exception as e:
-            self.logger.warning(f"⚠️ Error in parallel checking: {e}")
-            # Return False for any streamers we couldn't check
-            return {config['username']: False for config in enabled_streamers.values()}
+            try:
+                # Run batch tasks in parallel
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Process batch results
+                for result in results:
+                    if isinstance(result, tuple):
+                        username, is_live = result
+                        live_status[username] = is_live
+                    elif isinstance(result, Exception):
+                        self.logger.debug(f"Task exception: {result}")
+
+                # Brief pause between batches to avoid overwhelming the API
+                if i + batch_size < total_streamers:
+                    await asyncio.sleep(0.5)
+
+            except Exception as e:
+                self.logger.warning(f"⚠️ Error in batch {batch_num}: {e}")
+                # Mark failed batch streamers as offline
+                for streamer_key, streamer_config in batch:
+                    live_status[streamer_config['username']] = False
+
+        return live_status
 
     def get_check_statistics(self, results: Dict[str, bool], duration: float) -> Dict[str, any]:
         """Get statistics about the check operation"""
