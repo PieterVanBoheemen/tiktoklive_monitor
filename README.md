@@ -44,7 +44,7 @@ pip install TikTokLive
 ### Installation
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tiktoklive_monitor.git
+git clone https://github.com/pietervanboheemen/tiktoklive_monitor.git
 cd tiktoklive_monitor
 
 # Install dependencies
