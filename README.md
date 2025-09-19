@@ -350,7 +350,7 @@ print('Config loaded successfully')
 ### Development Setup
 ```bash
 # Clone and setup
-git clone https://github.com/yourusername/tiktoklive_monitor.git
+git clone https://github.com/pietervanboheemen/tiktoklive_monitor.git
 cd tiktoklive_monitor
 
 # Create virtual environment
