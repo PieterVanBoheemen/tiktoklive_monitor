@@ -17,10 +17,10 @@ class ConfigManager:
     def __init__(self, config_file: str = "streamers_config.json", session_id_override: Optional[str] = None):
         self.config_file = config_file
         self.session_id_override = session_id_override
+        self.logger = logging.getLogger(__name__)
         self.config = self.load_config()
         self.config_last_modified = self.get_config_mtime()
-        self.logger = logging.getLogger(__name__)
-
+        
         # Apply session ID override if provided
         if self.session_id_override:
             self.config['settings']['session_id'] = self.session_id_override
