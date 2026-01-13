@@ -52,6 +52,12 @@ class StreamRecorder:
             return False
 
         try:
+            # Avoid too many simultaneous recordings since dict is not incremented until after await
+            if username not in self.active_recordings:
+                self.active_recordings[username] = {}
+            else:
+                self.logger.error(f"Race condition detected: already recording {username}")
+                return False
             self.logger.info(f"🔴 Starting recording for {username}")
             start_time = datetime.now()
 
@@ -96,6 +102,10 @@ class StreamRecorder:
             self.logger.error(f"❌ Failed to start recording {username}: {e}")
 
             # Cleanup on failure
+            # Remove from active recordings: TODO: is this correct? We need to decrement dict to allow new recordings
+            if username in self.active_recordings:
+                del self.active_recordings[username]
+
             if self.csv_writer.is_writing(username):
                 self.csv_writer.close_csv_writers(username)
 
