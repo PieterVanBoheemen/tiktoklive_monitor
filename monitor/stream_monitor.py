@@ -17,6 +17,8 @@ from utils.session_logger import SessionLogger
 from utils.status_manager import StatusManager
 from utils.system_utils import check_system_limits, get_open_file_count
 
+# TODO: Is this needed? Commenting it out and using ConfigManager without quotes works fine.
+# There are no circular imports here.
 if TYPE_CHECKING:
     from config.config_manager import ConfigManager
 
@@ -230,6 +232,7 @@ class StreamMonitor:
         adjusted_interval = max(10, base_interval - check_duration)  # Minimum 10 seconds
 
         # Sleep in smaller chunks to be more responsive to shutdown signals
+        # TODO: check logic as adjusted_interval is always >=10 here and therefore the max is redundant
         sleep_chunks = max(1, int(adjusted_interval))
         for _ in range(sleep_chunks):
             if not self.monitoring:

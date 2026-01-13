@@ -197,6 +197,7 @@ class ConfigManager:
     def get_streamer_config(self, username: str) -> dict:
         """Get configuration for a specific streamer"""
         streamer_key = username.replace('@', '')
+        # TODO: key is the same as username without @, consider changing conf file to remove username otherwise error prone
         return self.config['streamers'].get(streamer_key, {})
 
     def get_session_id_for_streamer(self, username: str) -> Optional[str]:

@@ -25,17 +25,20 @@ class StabilityTracker:
 
     def track_stream_stability(self, username: str, is_live: bool, current_recording: bool) -> bool:
         """Enhanced stream status stability tracking to prevent rapid cycling"""
+        # now for all the checks
+        now = datetime.now()
+
         if username not in self.stream_stability:
             self.stream_stability[username] = {
                 'recent_checks': [],
-                'last_action_time': datetime.now() - timedelta(minutes=10),  # Allow immediate first action
+                'last_action_time': now - timedelta(minutes=10),  # Allow immediate first action
                 'consecutive_live': 0,
                 'consecutive_offline': 0,
                 'last_status': None
             }
 
         stability_info = self.stream_stability[username]
-        now = datetime.now()
+        
 
         # Keep only recent checks (last 10 minutes for better historical context)
         stability_info['recent_checks'] = [
@@ -48,19 +51,17 @@ class StabilityTracker:
 
         # Update consecutive counters
         if is_live:
+            stability_info['consecutive_offline'] = 0
             if stability_info['last_status'] == True:
                 stability_info['consecutive_live'] += 1
-                stability_info['consecutive_offline'] = 0
             else:
                 stability_info['consecutive_live'] = 1
-                stability_info['consecutive_offline'] = 0
         else:
+            stability_info['consecutive_live'] = 0
             if stability_info['last_status'] == False:
                 stability_info['consecutive_offline'] += 1
-                stability_info['consecutive_live'] = 0
             else:
                 stability_info['consecutive_offline'] = 1
-                stability_info['consecutive_live'] = 0
 
         stability_info['last_status'] = is_live
 

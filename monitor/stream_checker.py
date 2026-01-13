@@ -20,6 +20,7 @@ class StreamChecker:
     def __init__(self, config_manager: 'ConfigManager'):
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
+        self.clients = {}
 
     async def check_streamer_status(self, username: str) -> bool:
         """Check if a streamer is currently live with enhanced error handling"""
@@ -34,7 +35,12 @@ class StreamChecker:
                 )
                 os.environ['WHITELIST_AUTHENTICATED_SESSION_ID_HOST'] = whitelist_host
 
-                client = TikTokLiveClient(unique_id=username)
+                # Reuse existing client if available
+                if username in self.clients:
+                    client = self.clients[username]
+                else:
+                    client = TikTokLiveClient(unique_id=username)
+                    self.clients[username] = client
 
                 # Set session ID if available
                 session_id = self.config_manager.get_session_id_for_streamer(username)
