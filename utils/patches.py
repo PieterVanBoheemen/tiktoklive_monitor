@@ -47,6 +47,14 @@ async def _fetch_user_room_data(cls, web: TikTokHTTPClient, unique_id: str) -> d
                     unique_id,
                     "Service Unavailable (503) from TikTok when fetching room data."
                 )
+            elif response.status_code == 200 and response.text == "":
+                logger = logging.getLogger(cls.__name__)
+                logger.warning(f"⚠️  Service replies with empty response fetching room data for {unique_id}: {e}")
+                # debug_breakpoint()
+                raise FailedParseRoomIdError(
+                    unique_id,
+                    "Empty response from TikTok when fetching room data."
+                )
             else:
                 debug_breakpoint()
 
