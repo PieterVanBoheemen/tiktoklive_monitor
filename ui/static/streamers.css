@@ -1,0 +1,35 @@
+body { font-family: sans-serif; }
+.container {
+    display: flex;
+    gap: 20px;
+}
+.column {
+    width: 30%;
+    border: 1px solid #ccc;
+    padding: 10px;
+}
+.item {
+    padding: 6px;
+    margin: 4px 0;
+    border: 1px solid #aaa;
+    background: #f8f8f8;
+    cursor: grab;
+}
+.disabled {
+    opacity: 0.4;
+}
+
+.item.recording {
+  background-color: #ffe6e6;
+  border-color: #cc0000;
+}
+
+.item.not-recording {
+  background-color: #f8f8f8;
+}
+
+.item.recording::after {
+  content: " ● REC";
+  color: #cc0000;
+  font-weight: bold;
+}
