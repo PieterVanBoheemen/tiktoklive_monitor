@@ -16,6 +16,7 @@ from config.config_manager import ConfigManager
 from monitor.stream_monitor import StreamMonitor
 from utils.logging_setup import setup_logging
 from utils.system_utils import setup_platform_specific, activate_debug_breakpoint, debug_breakpoint
+from ui.app import start_server
 
 def parse_args():
     """Parse command line arguments"""
@@ -160,7 +161,8 @@ async def main():
 
         # Create and run the stream monitor
         monitor = StreamMonitor(config_manager)
-        await monitor.run()
+        srv_task = asyncio.create_task(start_server())
+        await asyncio.gather(srv_task, monitor.run())
 
     except FileNotFoundError as e:
         logger.error(f"❌ Configuration file not found: {e}")
