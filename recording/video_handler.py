@@ -4,11 +4,16 @@ Handles starting, stopping, and graceful termination of video recordings
 """
 
 import asyncio
+import os
 import logging
 import subprocess
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
+from utils.system_utils import debug_breakpoint
+
+
 
 
 class VideoHandler:
@@ -26,18 +31,36 @@ class VideoHandler:
         username_clean = username.replace("@", "")
         return self.output_directory / f"{username_clean}_{timestamp}.mp4"
 
+    def get_video_quality(self, room_info):
+        """Determine video quality from room info"""
+        from TikTokLive.client.web.routes.fetch_video_data import VideoFetchQuality
+
+        record_data: dict = json.loads(room_info['stream_url']['live_core_sdk_data']['pull_data']['stream_data'])
+        record_url_data: dict = record_data['data']
+        if 'ld' in record_url_data.keys():
+            quality : VideoFetchQuality = VideoFetchQuality.LD
+        elif 'origin' in record_url_data.keys():
+            quality : VideoFetchQuality = VideoFetchQuality.ORIGIN
+        else:
+            self.logger.error(f"Unable to set quality from {record_url_data.keys()}")
+            raise ValueError("Unknown video quality in room info: {record_url_data.keys()}")
+        return quality
+
     async def start_video_recording(self, client, username: str, start_time: datetime) -> Optional[Path]:
         """Start video recording for a streamer"""
         video_file = self.get_video_file_path(username, start_time)
 
         try:
             if hasattr(client.web, 'fetch_video_data'):
+                # Get quality as sometimes the default quality is not available
+                quality = self.get_video_quality(client.room_info)
                 client.web.fetch_video_data.start(
                     output_fp=str(video_file),
                     room_info=client.room_info,
+                    quality=quality,
                     output_format="mp4"
                 )
-
+                
                 # Store video recording info
                 self.active_video_processes[username] = {
                     'file_path': video_file,
@@ -54,6 +77,7 @@ class VideoHandler:
 
         except Exception as e:
             self.logger.error(f"Failed to start video recording for {username}: {e}")
+            debug_breakpoint()
             return None
 
     async def stop_video_recording(self, username: str, graceful: bool = True) -> bool:
@@ -94,7 +118,7 @@ class VideoHandler:
     async def _graceful_video_stop(self, username: str, fetch_video_data, video_file: Path) -> bool:
         """Gracefully stop video recording with proper finalization time"""
         try:
-            # Stop the video recording
+            
             fetch_video_data.stop()
 
             # Wait for initial finalization
@@ -102,6 +126,7 @@ class VideoHandler:
             await asyncio.sleep(5)  # Initial wait time
 
             # Check if the video process needs more time
+            # TODO: where is this coming from? I cannot find _process attribute in fetch_video_data
             if hasattr(fetch_video_data, '_process') and fetch_video_data._process:
                 process = fetch_video_data._process
                 if process.poll() is None:  # Process still running
@@ -116,7 +141,7 @@ class VideoHandler:
 
                     # If still running, send SIGTERM (not SIGKILL)
                     if process.poll() is None:
-                        self.logger.warning(f"⚠️ Sending SIGTERM to video process for {username}")
+                        self.logger.warning(f"⚠️  Sending SIGTERM to video process for {username}")
                         try:
                             process.terminate()  # Graceful termination
                             await asyncio.sleep(5)  # Give time to clean up
@@ -149,7 +174,7 @@ class VideoHandler:
                 if process.poll() is None:
                     try:
                         process.kill()  # Immediate termination
-                        self.logger.warning(f"⚠️ Force killed video process for {username}")
+                        self.logger.warning(f"⚠️  Force killed video process for {username}")
                     except:
                         pass
 
@@ -167,13 +192,13 @@ class VideoHandler:
                 self.logger.info(f"📁 Video file size for {username}: {file_size:.1f} MB")
 
                 if file_size < 0.1:  # Less than 100KB might indicate corruption
-                    self.logger.warning(f"⚠️ Video file for {username} seems very small, might be corrupted")
+                    self.logger.warning(f"⚠️  Video file for {username} seems very small, might be corrupted")
                 elif file_size < 1.0:  # Less than 1MB is suspicious for a stream
-                    self.logger.warning(f"⚠️ Video file for {username} is quite small ({file_size:.1f} MB)")
+                    self.logger.warning(f"⚠️  Video file for {username} is quite small ({file_size:.1f} MB)")
                 else:
                     self.logger.info(f"✅ Video file for {username} appears to be valid")
             else:
-                self.logger.warning(f"⚠️ Video file not found for {username}: {video_file}")
+                self.logger.warning(f"⚠️  Video file not found for {username}: {video_file}")
         except Exception as e:
             self.logger.debug(f"Error checking video file status for {username}: {e}")
 
@@ -210,7 +235,7 @@ class VideoHandler:
                         success = False
 
             except asyncio.TimeoutError:
-                self.logger.warning("⚠️ Timeout stopping video recordings")
+                self.logger.warning("⚠️  Timeout stopping video recordings")
                 success = False
 
         return success

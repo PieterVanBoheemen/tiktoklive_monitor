@@ -7,6 +7,7 @@ import asyncio
 import logging
 import platform
 from datetime import datetime
+import random
 from typing import Dict, List, TYPE_CHECKING
 
 from config.signal_handler import GracefulShutdownHandler
@@ -15,7 +16,7 @@ from .stability_tracker import StabilityTracker
 from recording.stream_recorder import StreamRecorder
 from utils.session_logger import SessionLogger
 from utils.status_manager import StatusManager
-from utils.system_utils import check_system_limits, get_open_file_count
+from utils.system_utils import check_system_limits, get_open_file_count, check_rate_limit, debug_breakpoint
 
 # TODO: Is this needed? Commenting it out and using ConfigManager without quotes works fine.
 # There are no circular imports here.
@@ -128,6 +129,7 @@ class StreamMonitor:
                 start_time = asyncio.get_event_loop().time()
 
                 self.logger.debug(f"🔄 Check cycle #{check_count} - Checking {len(enabled_streamers)} streamers in parallel...")
+                
 
                 # Check all streamers in parallel
                 live_status = await self.stream_checker.check_all_streamers_parallel(enabled_streamers)
@@ -173,16 +175,24 @@ class StreamMonitor:
                     actions_taken, config_changed
                 )
 
-                # Check if we should continue
-                if not self.monitoring:
-                    break
-
+                # Periodic cleanup
+                if check_count % 50 == 0:  # Every 50 cycles
+                    # debug_breakpoint()
+                    rl_task = asyncio.create_task(check_rate_limit())
+                    await self._periodic_cleanup()
+                    limits_info = await rl_task
+                    if 'error' in limits_info:
+                        self.logger.warning(f"⚠️  Rate limit check error: {limits_info['error']}")
+                    elif 'info' in limits_info:
+                        self.logger.info(f"✅ Rate limits: {limits_info['info']}")
+                        self.logger.debug(f"Dump of rate limits: {limits_info['rate_limits']}")
+                    
                 # Dynamic sleep with interrupt checking
                 await self._sleep_with_monitoring_check(check_duration)
 
-                # Periodic cleanup
-                if check_count % 50 == 0:  # Every 50 cycles
-                    await self._periodic_cleanup()
+                # Check if we should continue
+                if not self.monitoring:
+                    break
 
             except Exception as e:
                 self.logger.error(f"Error in monitoring loop: {e}")
@@ -192,7 +202,7 @@ class StreamMonitor:
                 if not self.monitoring:
                     break
 
-                await asyncio.sleep(30)
+                await asyncio.sleep(random.uniform(30*(1-1/5), 30*(1+1/5)))
 
     def _log_monitoring_status(self, check_count: int, total_streamers: int,
                              currently_live: List[str], currently_recording: List[str],
@@ -204,13 +214,13 @@ class StreamMonitor:
         if config_changed:
             status_msg_parts.append("🔄 Config reloaded")
         if currently_live:
-            status_msg_parts.append(f"📺 Live: {', '.join(currently_live)}")
+            status_msg_parts.append(f"📺 Live({len(currently_live)}): {', '.join(currently_live)}")
         else:
             status_msg_parts.append("💤 None live")
         if currently_recording:
-            status_msg_parts.append(f"🎥 Recording: {', '.join(currently_recording)}")
+            status_msg_parts.append(f"🎥 Recording({len(currently_recording)}): {', '.join(currently_recording)}")
         if pending_disconnects:
-            status_msg_parts.append(f"🔌 Pending disconnects: {', '.join(pending_disconnects)}")
+            status_msg_parts.append(f"🔌 Pending disconnects({len(pending_disconnects)}): {', '.join(pending_disconnects)}")
         status_msg_parts.append(f"⏱️ {check_duration:.1f}s")
 
         # Show status based on activity

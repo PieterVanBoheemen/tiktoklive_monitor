@@ -15,8 +15,7 @@ from pathlib import Path
 from config.config_manager import ConfigManager
 from monitor.stream_monitor import StreamMonitor
 from utils.logging_setup import setup_logging
-from utils.system_utils import setup_platform_specific
-
+from utils.system_utils import setup_platform_specific, activate_debug_breakpoint, debug_breakpoint
 
 def parse_args():
     """Parse command line arguments"""
@@ -66,6 +65,13 @@ Windows Examples:
         type=str,
         help='Output directory for recordings (overrides config)'
     )
+
+    parser.add_argument(
+        '--test', '-t',
+        action='store_true',
+        help='Test mode (activates breakpoints in code for debugging purposes)'
+    )
+
 
     parser.add_argument(
         '--verbose', '-v',
@@ -131,6 +137,10 @@ async def main():
 
     # Setup logging
     logger = setup_logging(verbose=args.verbose)
+
+    if args.test:
+        logger.info("🐞 Test mode activated - breakpoints will be triggered")
+        activate_debug_breakpoint()
 
     # Setup platform-specific configurations
     setup_platform_specific()

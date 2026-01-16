@@ -7,6 +7,7 @@ import asyncio
 import logging
 import os
 import platform
+import random
 import signal
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -139,7 +140,7 @@ class GracefulShutdownHandler:
                     )
                     self.logger.info("✅ All recordings stopped gracefully")
                 except asyncio.TimeoutError:
-                    self.logger.warning("⚠️ Some recordings took longer than expected to stop")
+                    self.logger.warning("⚠️  Some recordings took longer than expected to stop")
                     # Force cleanup any remaining recordings
                     for username in list(self.monitor.active_recordings.keys()):
                         try:
@@ -176,7 +177,7 @@ class GracefulShutdownHandler:
                         child.wait(timeout=5)
                         self.logger.debug(f"FFmpeg process {child.pid} terminated gracefully")
                     except psutil.TimeoutExpired:
-                        self.logger.warning(f"⚠️ Force killing FFmpeg process: {child.pid}")
+                        self.logger.warning(f"⚠️  Force killing FFmpeg process: {child.pid}")
                         try:
                             child.kill()
                         except:
@@ -191,7 +192,7 @@ class GracefulShutdownHandler:
 
     async def handle_pause_signal(self, duration: int):
         """Handle pause signal"""
-        self.logger.info(f"⏸️  Pausing monitoring for {duration} seconds...")
+        self.logger.info(f"⏸️  Pausing monitoring for about {duration} seconds...")
 
         # Update status if monitor has status update capability
         if hasattr(self.monitor, 'update_status_file'):
@@ -204,7 +205,7 @@ class GracefulShutdownHandler:
             except Exception as e:
                 self.logger.warning(f"Could not remove pause file: {e}")
 
-        await asyncio.sleep(duration)
+        await asyncio.sleep(random.uniform(duration*(1-1/5), duration*(1+1/5)))
         self.logger.info("▶️  Resuming monitoring...")
 
         # Update status

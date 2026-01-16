@@ -8,6 +8,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+import random
 from typing import Dict, Optional, Any
 
 from TikTokLive.client.client import TikTokLiveClient
@@ -17,6 +18,7 @@ from TikTokLive.events.proto_events import JoinEvent, LikeEvent
 
 from .csv_writer import CSVWriter
 from .video_handler import VideoHandler
+from utils.patches import patch_TikTokLiveClient
 
 
 class StreamRecorder:
@@ -66,6 +68,8 @@ class StreamRecorder:
 
             # Create TikTok client
             client = TikTokLiveClient(unique_id=username)
+            # Override some methods for better error handling
+            patch_TikTokLiveClient(client)
             self._configure_client_session(client, username)
 
             # Create CSV files
@@ -155,7 +159,7 @@ class StreamRecorder:
                     self.logger.debug(f"Disconnect error for {username}: {e}")
 
                 # Give time for events to finish processing
-                await asyncio.sleep(3)
+                await asyncio.sleep(random.uniform(3, 5))
 
             # Close CSV files
             csv_success = self.csv_writer.close_csv_writers(username)
@@ -168,7 +172,7 @@ class StreamRecorder:
                 duration, recording_info['stats']
             )
 
-            self.logger.info(f"⏹️ Stopped recording {username} ({reason}) - Duration: {duration:.1f}m")
+            self.logger.info(f"⏹️  Stopped recording {username} ({reason}) - Duration: {duration:.1f}m")
             self.logger.info(f"📊 Stats: {recording_info['stats']}")
             return True
 
@@ -268,38 +272,56 @@ class StreamRecorder:
         @client.on(CommentEvent)
         async def on_comment(event: CommentEvent):
             if recording_info.get('is_recording', False):
-                recording_info['stats']['comments'] += 1
-                self.csv_writer.write_comment(username, event)
+                try:
+                    self.csv_writer.write_comment(username, event)
+                    recording_info['stats']['comments'] += 1
+                except Exception as e:
+                    self.logger.error(f"Error writing comment from {event} for {username}: {e}")
 
         @client.on(GiftEvent)
         async def on_gift(event: GiftEvent):
             if recording_info.get('is_recording', False):
-                recording_info['stats']['gifts'] += 1
-                self.csv_writer.write_gift(username, event)
+                try:
+                    self.csv_writer.write_gift(username, event)
+                    recording_info['stats']['gifts'] += 1
+                except Exception as e:
+                    self.logger.error(f"Error writing gift from {event} for {username}: {e}")
 
         @client.on(FollowEvent)
         async def on_follow(event: FollowEvent):
             if recording_info.get('is_recording', False):
-                recording_info['stats']['follows'] += 1
-                self.csv_writer.write_follow(username, event)
+                try:
+                    self.csv_writer.write_follow(username, event)
+                    recording_info['stats']['follows'] += 1
+                except Exception as e:
+                    self.logger.error(f"Error writing follow from {event} for {username}: {e}")     
 
         @client.on(ShareEvent)
         async def on_share(event: ShareEvent):
             if recording_info.get('is_recording', False):
-                recording_info['stats']['shares'] += 1
-                self.csv_writer.write_share(username, event)
+                try:
+                    self.csv_writer.write_share(username, event)
+                    recording_info['stats']['shares'] += 1
+                except Exception as e:
+                    self.logger.error(f"Error writing share from {event} for {username}: {e}")  
 
         @client.on(JoinEvent)
         async def on_join(event: JoinEvent):
             if recording_info.get('is_recording', False):
-                recording_info['stats']['joins'] += 1
-                self.csv_writer.write_join(username, event)
+                try:
+                    self.csv_writer.write_join(username, event)
+                    recording_info['stats']['joins'] += 1
+                except Exception as e:
+                    self.logger.error(f"Error writing join from {event} for {username}: {e}")
 
         @client.on(LikeEvent)
         async def on_like(event: LikeEvent):
             if recording_info.get('is_recording', False):
-                recording_info['stats']['likes'] += 1
-                self.csv_writer.write_like(username, event)
+                try:
+                    self.csv_writer.write_like(username, event)
+                    recording_info['stats']['likes'] += 1
+                except Exception as e:
+                    self.logger.error(f"Error writing like from {event} for {username}: {e}")
 
     async def _handle_disconnect_confirmation(self, username: str):
         """Handle disconnect confirmation after delay"""
@@ -307,7 +329,7 @@ class StreamRecorder:
             'disconnect_confirmation_delay_seconds', 30
         )
 
-        await asyncio.sleep(disconnect_delay)
+        await asyncio.sleep(random.uniform(disconnect_delay, disconnect_delay*(1+1/5)))
 
         # Check if still in pending disconnects and still recording
         if username in self.pending_disconnects and username in self.active_recordings:
@@ -323,7 +345,7 @@ class StreamRecorder:
                 else:
                     self.logger.info(f"🟢 {username} back online after disconnect - continuing recording")
             except Exception as e:
-                self.logger.warning(f"⚠️ Error confirming disconnect for {username}: {e}")
+                self.logger.warning(f"⚠️  Error confirming disconnect for {username}: {e}")
                 # Assume disconnect is real and stop recording
                 await self.stop_recording(username, "disconnect_error")
 
@@ -375,7 +397,7 @@ class StreamRecorder:
                         success = False
 
             except asyncio.TimeoutError:
-                self.logger.warning("⚠️ Timeout stopping recordings")
+                self.logger.warning("⚠️  Timeout stopping recordings")
                 success = False
 
         return success

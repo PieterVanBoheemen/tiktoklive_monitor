@@ -6,9 +6,14 @@ Handles checking if streamers are live with retries and parallel processing
 import asyncio
 import logging
 import os
+import random
 from typing import Dict, TYPE_CHECKING
 
 from TikTokLive.client.client import TikTokLiveClient
+import httpx
+
+from utils.system_utils import debug_breakpoint
+from utils.patches import patch_TikTokLiveClient
 
 if TYPE_CHECKING:
     from config.config_manager import ConfigManager
@@ -40,6 +45,7 @@ class StreamChecker:
                     client = self.clients[username]
                 else:
                     client = TikTokLiveClient(unique_id=username)
+                    patch_TikTokLiveClient(client)
                     self.clients[username] = client
 
                 # Set session ID if available
@@ -58,20 +64,29 @@ class StreamChecker:
                 return is_live
 
             except asyncio.TimeoutError:
+                self.logger.warning(f"⏱️ Async timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
                 if attempt < max_retries:
-                    self.logger.debug(f"⏱️ Timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
-                    await asyncio.sleep(0.5)  # Minimal delay for retry
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
                     continue
                 else:
-                    self.logger.debug(f"⏱️ Final timeout checking {username} after {max_retries + 1} attempts")
+                    self.logger.warning(f"⏱️ Final asynch timeout checking {username} after {max_retries + 1} attempts")
+                    return False
+            except httpx.ReadTimeout:
+                self.logger.warning(f"⏱️ Network timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                if attempt < max_retries:
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
+                    continue
+                else:
+                    self.logger.warning(f"⏱️ Final network timeout checking {username} after {max_retries + 1} attempts")
                     return False
             except Exception as e:
+                self.logger.error(f"⚠️  Error checking {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                debug_breakpoint()
                 if attempt < max_retries:
-                    self.logger.debug(f"⚠️ Error checking {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
-                    await asyncio.sleep(0.5)  # Minimal delay for retry
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
                     continue
                 else:
-                    self.logger.debug(f"❌ Final error checking {username}: {e}")
+                    self.logger.warning(f"❌ Final error checking {username}: {e}")
                     return False
 
         return False
@@ -81,7 +96,7 @@ class StreamChecker:
         timeout = self.config_manager.config['settings'].get('individual_check_timeout', 20)
         batch_size = self.config_manager.config['settings'].get('batch_size', 50)
 
-        async def check_single_streamer_with_timeout(streamer_key: str, streamer_config: dict):
+        async def check_single_streamer_with_timeout(streamer_config: dict):
             username = streamer_config['username']
             try:
                 # Use individual timeout per streamer
@@ -98,23 +113,23 @@ class StreamChecker:
                 return username, False
 
         # Split streamers into batches
-        streamer_items = list(enabled_streamers.items())
-        total_streamers = len(streamer_items)
+        streamer_configs = [streamer_config for _key, streamer_config in enabled_streamers.items()]
+        total_streamers = len(streamer_configs)
         live_status = {}
 
         self.logger.info(f"🔄 Processing {total_streamers} streamers in batches of {batch_size}")
 
+        total_batches = (total_streamers + batch_size - 1) // batch_size
         for i in range(0, total_streamers, batch_size):
-            batch = streamer_items[i:i + batch_size]
+            batch = streamer_configs[i:i + batch_size]
             batch_num = (i // batch_size) + 1
-            total_batches = (total_streamers + batch_size - 1) // batch_size
             
             self.logger.info(f"📦 Processing batch {batch_num}/{total_batches} ({len(batch)} streamers)")
 
             # Create tasks for current batch
             tasks = [
-                check_single_streamer_with_timeout(streamer_key, streamer_config)
-                for streamer_key, streamer_config in batch
+                check_single_streamer_with_timeout(streamer_config)
+                for streamer_config in batch
             ]
 
             try:
@@ -126,17 +141,21 @@ class StreamChecker:
                     if isinstance(result, tuple):
                         username, is_live = result
                         live_status[username] = is_live
+                        if not is_live:
+                            self.logger.debug(f"🔴 {username} is offline")
+                            if username in self.clients:
+                                del self.clients[username]  # Remove client to avoid accumulating TikTokLiveClient instances
                     elif isinstance(result, Exception):
                         self.logger.debug(f"Task exception: {result}")
 
                 # Brief pause between batches to avoid overwhelming the API
                 if i + batch_size < total_streamers:
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(random.uniform(0.5,2))
 
             except Exception as e:
-                self.logger.warning(f"⚠️ Error in batch {batch_num}: {e}")
+                self.logger.warning(f"⚠️  Error in batch {batch_num}: {e}")
                 # Mark failed batch streamers as offline
-                for streamer_key, streamer_config in batch:
+                for streamer_config in batch:
                     live_status[streamer_config['username']] = False
 
         return live_status

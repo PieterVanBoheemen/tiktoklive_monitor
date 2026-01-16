@@ -3,14 +3,17 @@ System utilities for TikTok Live Stream Monitor
 Platform detection, resource limits, and system-specific configurations
 """
 
+import asyncio
 import logging
 import os
 import platform
 import resource
 import subprocess
-from pathlib import Path
-from typing import Dict, Any  # ← ADD THIS MISSING IMPORT
-
+# from pathlib import Path
+from typing import Dict, Any
+# from urllib import response  # ← ADD THIS MISSING IMPORT
+import requests_async
+from httpx import HTTPError, TimeoutException
 
 def setup_platform_specific():
     """Setup platform-specific configurations"""
@@ -65,6 +68,66 @@ def check_system_limits(max_concurrent_recordings: int) -> Dict[str, Any]:
 
     return limits_info
 
+async def check_rate_limit() -> Dict[str, Any]:
+    """Check TikTok API rate limits using EulerStream endpoint"""
+    logger = logging.getLogger(__name__)
+    limits_info = {}
+
+    api_key = os.environ.get("SIGN_API_KEY")
+    host = os.environ.get('WHITELIST_AUTHENTICATED_SESSION_ID_HOST')
+    
+
+    if host == "tiktok.eulerstream.com":
+        if api_key:
+            url = f"https://tiktok.eulerstream.com/webcast/rate_limits?apiKey={api_key}"
+        else:
+            url = "https://tiktok.eulerstream.com/webcast/rate_limits"
+    
+        headers = {}
+        async with requests_async.AsyncSession(timeout=30.0, headers=headers) as session:
+            try:
+                response = await session.get(url)
+                logger.debug(f"📊 TikTok API Rate Limits reply: {response.text}")
+                # debug_breakpoint()
+                if response.status_code == 200:
+                    data = response.json()
+                    limits_info['rate_limits'] = data
+                    # debug_breakpoint()
+                    if data.get('code', 0) != 200:
+                        limits_info['error'] = data.get('message', 'Unknown error')
+                        logger.warning(f"⚠️  Rate limit error: {limits_info['error']}")
+                    else:
+                        remaining_day = data['day']['remaining']
+                        day_reset = data['day']['reset_at']
+                        # from datetime import datetime
+                        # from dateutil.tz import gettz
+                        # zone = os.environ.get('TIMEZONE', 'UTC') or 'Europe/Amsterdam'
+                        # datetime.strptime(data['day']['reset_at'], '%Y-%m-%dT%H:%M:%S.%f%z').astimezone(gettz(zone)).isoformat(timespec='seconds')
+                        remaining_hour = data['hour']['remaining']
+                        hour_reset = data['hour']['reset_at']
+                        remaining_min = data['minute']['remaining']
+                        min_reset = data['minute']['reset_at']
+
+                        limits_info['info'] = f'Remaining calls: Day: {remaining_day}{" (resets at " + day_reset + ")" if day_reset else ""}, ' \
+                                            f'Hour: {remaining_hour}{" (resets at " + hour_reset + ")" if hour_reset else ""}, ' \
+                                            f'Minute: {remaining_min}{" (resets at " + min_reset + ")" if min_reset else ""}'
+
+                else:
+                    logger.warning(f"⚠️  Could not fetch rate limits, status code: {response.status_code}")
+                    limits_info['error'] = f"API status code: {response.status_code}"
+            except HTTPError as e:
+                err_msg = f"Error fetching data from {url}: {e}"
+                limits_info['error'] = err_msg
+                logger.error(err_msg)
+            except TimeoutError:
+                err_msg = f"Request to {url} timed out"
+                limits_info['error'] = err_msg
+                logger.error(err_msg)
+    else:
+        logger.debug("⚠️  Rate limit check skipped, not using EulerStream host")
+        limits_info['info'] = "Rate limit check skipped, not using EulerStream host"
+
+    return limits_info
 
 def get_open_file_count() -> int:
     """Get current number of open file descriptors (Unix only)"""
@@ -75,3 +138,14 @@ def get_open_file_count() -> int:
         return 0
     except:
         return 0
+
+activate_breakpoint = False
+
+def activate_debug_breakpoint():
+    global activate_breakpoint
+    activate_breakpoint = True
+
+
+def debug_breakpoint():
+    if activate_breakpoint:
+        breakpoint()  # This will trigger the debugger only when activate_breakpoint is True
