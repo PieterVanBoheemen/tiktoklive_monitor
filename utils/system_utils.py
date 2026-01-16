@@ -57,7 +57,7 @@ def check_system_limits(max_concurrent_recordings: int) -> Dict[str, Any]:
 
             if max_concurrent_recordings > max_concurrent:
                 logger.warning(f"⚠️  Configured max recordings ({max_concurrent_recordings}) may exceed system limits")
-                logger.warning(f"   Consider reducing to {max_concurrent} or increasing ulimit")
+                logger.warning(f"⚠️  Consider reducing to {max_concurrent} or increasing ulimit")
                 limits_info['warning'] = f"May exceed system limits"
             else:
                 limits_info['status'] = 'ok'
@@ -116,11 +116,11 @@ async def check_rate_limit() -> Dict[str, Any]:
                     logger.warning(f"⚠️  Could not fetch rate limits, status code: {response.status_code}")
                     limits_info['error'] = f"API status code: {response.status_code}"
             except HTTPError as e:
-                err_msg = f"Error fetching data from {url}: {e}"
+                err_msg = f"❌ Error fetching data from {url}: {e}"
                 limits_info['error'] = err_msg
                 logger.error(err_msg)
             except TimeoutError:
-                err_msg = f"Request to {url} timed out"
+                err_msg = f"❌ Request to {url} timed out"
                 limits_info['error'] = err_msg
                 logger.error(err_msg)
     else:

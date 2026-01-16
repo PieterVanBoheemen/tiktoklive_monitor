@@ -3,6 +3,8 @@ import psutil
 import types
 import sys
 import os
+import json
+import logging
 
 from httpx import Response
 
@@ -36,11 +38,25 @@ async def _fetch_user_room_data(cls, web: TikTokHTTPClient, unique_id: str) -> d
         )
         try:
             response_json: dict = response.json()
+        except json.decoder.JSONDecodeError as e:
+            if response.status_code == 503:
+                logger = logging.getLogger(cls.__name__)
+                logger.warning(f"⚠️  Service unavailable fetching room data for {unique_id}: {e}")
+                raise FailedParseRoomIdError(
+                    unique_id,
+                    "Service Unavailable (503) from TikTok when fetching room data."
+                )
+            else:
+                debug_breakpoint()
+
         except Exception as e:
-            print(f"Remove me! Exception: {e} - {type(e)}")
-            print(f"Remove me! response: {response} - {response.text}")
+            logger = logging.getLogger(cls.__name__)
+            logger.error(f"❌ Exception {e} of type {type(e)}, received response: {response} - {response.text}")
             debug_breakpoint()
-            return {}
+            raise FailedParseRoomIdError(
+                    unique_id,
+                    f"Exception {e} of type {type(e)}, received response: {response} - {response.text}"
+                )
 
         # Invalid user
         if response_json["message"] == "user_not_found":
@@ -64,7 +80,7 @@ def _stop(self) -> None:
     """
     # debug_breakpoint()
     if not self.is_recording:
-        self._logger.warning("Attempted to stop a stream that does not exist or has not started.")
+        self._logger.warning("⚠️  Attempted to stop a stream that does not exist or has not started.")
         return
     # Avoid exception since apparently sometimes _ffmpeg has already terminated
     if psutil.pid_exists(self._ffmpeg.process.pid):

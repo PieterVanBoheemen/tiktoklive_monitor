@@ -87,7 +87,7 @@ class ConfigManager:
                     # Validate and merge with defaults to ensure all required keys exist
                     return self._merge_with_defaults(config)
             except Exception as e:
-                self.logger.error(f"Error loading config: {e}")
+                self.logger.error(f"❌ Error loading config: {e}")
                 return self.get_default_config()
         else:
             # Create default config file
@@ -183,7 +183,7 @@ class ConfigManager:
                 return True
 
         except Exception as e:
-            self.logger.error(f"Error checking config changes: {e}")
+            self.logger.error(f"❌ Error checking config changes: {e}")
 
         return False
 
@@ -246,5 +246,5 @@ class ConfigManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Config validation error: {e}")
+            self.logger.error(f"❌ Config validation error: {e}")
             return False

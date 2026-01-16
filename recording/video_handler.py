@@ -42,7 +42,7 @@ class VideoHandler:
         elif 'origin' in record_url_data.keys():
             quality : VideoFetchQuality = VideoFetchQuality.ORIGIN
         else:
-            self.logger.error(f"Unable to set quality from {record_url_data.keys()}")
+            self.logger.error(f"❌ Unable to set quality from {record_url_data.keys()}")
             raise ValueError("Unknown video quality in room info: {record_url_data.keys()}")
         return quality
 
@@ -76,7 +76,7 @@ class VideoHandler:
                 return None
 
         except Exception as e:
-            self.logger.error(f"Failed to start video recording for {username}: {e}")
+            self.logger.error(f"❌ Failed to start video recording for {username}: {e}")
             debug_breakpoint()
             return None
 
@@ -108,7 +108,7 @@ class VideoHandler:
                 return True
 
         except Exception as e:
-            self.logger.error(f"Error stopping video recording for {username}: {e}")
+            self.logger.error(f"❌ Error stopping video recording for {username}: {e}")
             return False
         finally:
             # Clean up from active processes
@@ -151,13 +151,13 @@ class VideoHandler:
                                 self.logger.error(f"❌ Video process for {username} not responding to SIGTERM")
                                 return False
                         except Exception as e:
-                            self.logger.error(f"Error terminating video process for {username}: {e}")
+                            self.logger.error(f"❌ Error terminating video process for {username}: {e}")
                             return False
 
             return True
 
         except Exception as e:
-            self.logger.error(f"Error in graceful video stop for {username}: {e}")
+            self.logger.error(f"❌ Error in graceful video stop for {username}: {e}")
             return False
 
     async def _force_video_stop(self, username: str, fetch_video_data, video_file: Path) -> bool:
@@ -181,7 +181,7 @@ class VideoHandler:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error in force video stop for {username}: {e}")
+            self.logger.error(f"❌ Error in force video stop for {username}: {e}")
             return False
 
     async def _check_video_file_status(self, video_file: Path, username: str):
@@ -229,7 +229,7 @@ class VideoHandler:
                 # Check results
                 for i, result in enumerate(results):
                     if isinstance(result, Exception):
-                        self.logger.error(f"Error stopping video recording {i}: {result}")
+                        self.logger.error(f"❌ Error stopping video recording {i}: {result}")
                         success = False
                     elif not result:
                         success = False

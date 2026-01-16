@@ -195,7 +195,7 @@ class StreamMonitor:
                     break
 
             except Exception as e:
-                self.logger.error(f"Error in monitoring loop: {e}")
+                self.logger.error(f"❌ Error in monitoring loop: {e}")
                 self.status_manager.update_status_file("error", f"Error in monitoring loop: {e}")
 
                 # Even on error, check if we should continue
