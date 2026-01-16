@@ -19,6 +19,7 @@ from TikTokLive.events.proto_events import JoinEvent, LikeEvent
 from .csv_writer import CSVWriter
 from .video_handler import VideoHandler
 from utils.patches import patch_TikTokLiveClient
+from utils.system_utils import debug_breakpoint
 
 
 class StreamRecorder:
@@ -277,6 +278,7 @@ class StreamRecorder:
                     recording_info['stats']['comments'] += 1
                 except Exception as e:
                     self.logger.error(f"❌ Error writing comment from {event} for {username}: {e}")
+                    debug_breakpoint()
 
         @client.on(GiftEvent)
         async def on_gift(event: GiftEvent):
@@ -286,6 +288,7 @@ class StreamRecorder:
                     recording_info['stats']['gifts'] += 1
                 except Exception as e:
                     self.logger.error(f"❌ Error writing gift from {event} for {username}: {e}")
+                    debug_breakpoint()
 
         @client.on(FollowEvent)
         async def on_follow(event: FollowEvent):
@@ -294,7 +297,8 @@ class StreamRecorder:
                     self.csv_writer.write_follow(username, event)
                     recording_info['stats']['follows'] += 1
                 except Exception as e:
-                    self.logger.error(f"❌ Error writing follow from {event} for {username}: {e}")     
+                    self.logger.error(f"❌ Error writing follow from {event} for {username}: {e}")  
+                    debug_breakpoint()   
 
         @client.on(ShareEvent)
         async def on_share(event: ShareEvent):
@@ -303,7 +307,8 @@ class StreamRecorder:
                     self.csv_writer.write_share(username, event)
                     recording_info['stats']['shares'] += 1
                 except Exception as e:
-                    self.logger.error(f"❌ Error writing share from {event} for {username}: {e}")  
+                    self.logger.error(f"❌ Error writing share from {event} for {username}: {e}")
+                    debug_breakpoint()
 
         @client.on(JoinEvent)
         async def on_join(event: JoinEvent):
@@ -313,6 +318,7 @@ class StreamRecorder:
                     recording_info['stats']['joins'] += 1
                 except Exception as e:
                     self.logger.error(f"❌ Error writing join from {event} for {username}: {e}")
+                    debug_breakpoint()
 
         @client.on(LikeEvent)
         async def on_like(event: LikeEvent):
@@ -322,6 +328,7 @@ class StreamRecorder:
                     recording_info['stats']['likes'] += 1
                 except Exception as e:
                     self.logger.error(f"❌ Error writing like from {event} for {username}: {e}")
+                    debug_breakpoint()
 
     async def _handle_disconnect_confirmation(self, username: str):
         """Handle disconnect confirmation after delay"""

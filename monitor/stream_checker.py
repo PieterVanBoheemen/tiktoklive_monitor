@@ -12,6 +12,7 @@ from typing import Dict, TYPE_CHECKING
 import httpx
 from TikTokLive.client.client import TikTokLiveClient
 from TikTokLive.client.web.routes.fetch_room_id_live_html import FailedParseRoomIdError
+from TikTokLive.client.errors import UserNotFoundError
 
 
 from utils.system_utils import debug_breakpoint
@@ -66,37 +67,45 @@ class StreamChecker:
                 return is_live
 
             except asyncio.TimeoutError:
-                self.logger.warning(f"⚠️  Async timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
                 if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Async timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
                     await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
                     continue
                 else:
-                    self.logger.warning(f"⚠️  Final asynch timeout checking {username} after {max_retries + 1} attempts")
+                    self.logger.error(f"❌ Final asynch timeout checking {username} after {max_retries + 1} attempts")
                     return False
             except httpx.ReadTimeout:
-                self.logger.warning(f"⚠️  Network timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
                 if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Network timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
                     await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
                     continue
                 else:
-                    self.logger.warning(f"⚠️  Final network timeout checking {username} after {max_retries + 1} attempts")
+                    self.logger.error(f"❌ Final network timeout checking {username} after {max_retries + 1} attempts")
                     return False
             except FailedParseRoomIdError as e:
-                self.logger.warning(f"⚠️  Failed to parse room ID for {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
                 if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Failed to parse room ID for {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
                     await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
                     continue
                 else:
                     self.logger.error(f"❌ Final failed to parse room ID for {username} after {max_retries + 1} attempts")
                     return False
-            except Exception as e:
-                self.logger.warning(f"⚠️  Error checking {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
-                debug_breakpoint()
+            except UserNotFoundError as e:
                 if attempt < max_retries:
+                    self.logger.warning(f"⚠️  User not found for {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
                     await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
                     continue
                 else:
-                    self.logger.error(f"❌ Final error checking {username}: {e}")
+                    self.logger.error(f"❌ Final user not found for {username} after {max_retries + 1} attempts")
+                    return False
+            except Exception as e:
+                debug_breakpoint()
+                if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Unknown error checking {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
+                    continue
+                else:
+                    self.logger.error(f"❌ Final unknown error checking {username}: {e}")
                     return False
 
         return False

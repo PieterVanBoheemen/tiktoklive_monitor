@@ -42,6 +42,7 @@ async def _fetch_user_room_data(cls, web: TikTokHTTPClient, unique_id: str) -> d
             if response.status_code == 503:
                 logger = logging.getLogger(cls.__name__)
                 logger.warning(f"⚠️  Service unavailable fetching room data for {unique_id}: {e}")
+                # debug_breakpoint()
                 raise FailedParseRoomIdError(
                     unique_id,
                     "Service Unavailable (503) from TikTok when fetching room data."
@@ -60,6 +61,7 @@ async def _fetch_user_room_data(cls, web: TikTokHTTPClient, unique_id: str) -> d
 
         # Invalid user
         if response_json["message"] == "user_not_found":
+            # debug_breakpoint()
             raise UserNotFoundError(
                 unique_id,
                 (
@@ -67,7 +69,19 @@ async def _fetch_user_room_data(cls, web: TikTokHTTPClient, unique_id: str) -> d
                     "or has never gone live on TikTok, or does not exist."
                 )
             )
-
+        if response_json["message"] == "Service Unavailable":
+            raise FailedParseRoomIdError(
+                unique_id,
+                f"Service Unavailable from TikTok when fetching room data, entire response: {response_json}"
+            )
+        if not ("data" in response_json and response_json["data"] != None and 
+                "liveRoom" in response_json["data"] and response_json["data"]["liveRoom"] != None and 
+                "status" in response_json["data"]["liveRoom"] and response_json["data"]["liveRoom"]["status"] != None):
+            debug_breakpoint()
+            raise FailedParseRoomIdError(
+                unique_id,
+                "Could not find 'data.liveRoom.status' in the response from TikTok."
+            )
         return response_json
 
 
