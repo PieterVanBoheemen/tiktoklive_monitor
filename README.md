@@ -168,8 +168,10 @@ recordings/
 ├── creator1_20240703_143022_joins.csv        # Viewer joins
 └── creator1_20240703_143022_likes.csv        # Likes and reactions
 
-monitoring_sessions_20240703.csv               # Session statistics
-monitor_20240703.log                          # Application logs
+logs/
+├── monitoring_sessions_20240703.csv               # Session statistics
+├── monitor_20240703.log                          # Application logs
+
 monitor_status.txt                            # Current status
 ```
 

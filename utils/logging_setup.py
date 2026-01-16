@@ -11,7 +11,8 @@ from pathlib import Path
 def setup_logging(verbose: bool = False) -> logging.Logger:
     """Setup logging configuration"""
     # Create log file with date
-    log_file = Path(f"monitor_{datetime.now().strftime('%Y%m%d')}.log")
+    log_file = Path(f"./logs/monitor_{datetime.now().strftime('%Y%m%d')}.log")
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Set log level based on verbose flag
     log_level = logging.DEBUG if verbose else logging.INFO

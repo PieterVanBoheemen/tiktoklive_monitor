@@ -13,7 +13,7 @@ from typing import Dict, Optional, Any, List
 class SessionLogger:
     """Handles session event logging to CSV"""
 
-    def __init__(self, log_directory: str = "."):
+    def __init__(self, log_directory: str = "./logs"):
         self.logger = logging.getLogger(__name__)
         self.log_directory = Path(log_directory)
         self.log_directory.mkdir(parents=True, exist_ok=True)
