@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Streamer Priority Manager</title>
+  <script src="static/Sortable.min.js"></script>
+  <link rel="stylesheet" href="static/streamers.css">
+</head>
+<body>
+
+<h2>Priority Groups</h2>
+<button onclick="save()">Save to file</button>
+
+<div class="container">
+  <div class="column">
+    <h3>High</h3>
+    <ul id="high"></ul>
+  </div>
+  <div class="column">
+    <h3>Medium</h3>
+    <ul id="medium"></ul>
+  </div>
+  <div class="column">
+    <h3>Low</h3>
+    <ul id="low"></ul>
+  </div>
+</div>
+
+<script>
+async function load() {
+  const res = await fetch("/api/streamers");
+  const data = await res.json();
+
+  ["high", "medium", "low"].forEach(g => {
+    const ul = document.getElementById(g);
+    ul.innerHTML = "";
+
+    data[g].forEach(([name, s]) => {
+      const li = document.createElement("li");
+      
+      let classes = ["item"];
+
+      if (!s.enabled) classes.push("disabled");
+      if (s.is_recording) {
+        classes.push("recording");
+      } else {
+        classes.push("not-recording");
+      }
+
+      li.className = classes.join(" ");
+
+      li.dataset.name = name;
+      li.innerHTML = `
+        <b>${name}</b><br>
+        priority: ${s.priority}<br>
+        tags: ${s.tags.join(", ")}<br>
+        notes: ${s.notes}<br>
+        <button onclick="toggle('${name}')">toggle</button>
+      `;
+      ul.appendChild(li);
+    });
+  });
+}
+
+async function reorder(group, ul) {
+  const order = [...ul.children].map(li => li.dataset.name);
+  await fetch(`/api/reorder/${group}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(order)
+  });
+}
+
+async function toggle(name) {
+  await fetch(`/api/toggle/${name}`, { method: "POST" });
+  load();
+}
+
+async function save() {
+  await fetch("/api/save", { method: "POST" });
+  alert("saved");
+}
+
+["high", "medium", "low"].forEach(g => {
+  new Sortable(document.getElementById(g), {
+    group: "priority",
+    animation: 150,
+    onEnd: () => reorder(g, document.getElementById(g))
+  });
+});
+
+load();
+</script>
+
+</body>
+</html>
