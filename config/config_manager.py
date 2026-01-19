@@ -44,16 +44,14 @@ class ConfigManager:
         """Get the default configuration structure"""
         return {
             "streamers": {
-                "example_user1": {
-                    "username": "@example_user1",
+                "@example_user1": {
                     "enabled": True,
                     "session_id": None,
                     "tt_target_idc": None,
                     "tags": ["research", "category1"],
                     "notes": "Example streamer for research"
                 },
-                "example_user2": {
-                    "username": "@example_user2",
+                "@example_user2": {
                     "enabled": True,
                     "session_id": None,
                     "tt_target_idc": None,
@@ -64,6 +62,7 @@ class ConfigManager:
             "settings": {
                 "check_interval_seconds": 60,
                 "max_concurrent_recordings": 5,
+                "pause_monitoring_if_failure_seconds": 300,
                 "output_directory": "recordings",
                 "session_id": None,
                 "tt_target_idc": "us-eastred",
