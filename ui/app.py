@@ -49,12 +49,12 @@ class TikUIApp:
 
     async def setup_routes(self):
         # ---------- Static HTML ----------
-        self.app.mount("/static", StaticFiles(directory="ui/static"), name="static")
+        self.app.mount("/static", StaticFiles(directory="./ui/static"), name="static")
         
         # ---------- API ----------
         @self.app.get("/", response_class=HTMLResponse)
         async def index():
-            return Path("static/index.html").read_text()
+            return Path("./ui/static/index.html").read_text()
         
         @self.app.get("/api/streamers")
         async def get_streamers():
@@ -101,22 +101,30 @@ class TikUIApp:
         self.app.run(debug=True)
 
 
+async def start_server(config):
 
+
+    myapp = TikUIApp(config)
+    await myapp.initialize()
+    app = myapp.app
+    
+    config = uvicorn.Config(app, loop="asyncio", log_config=None)
+    server = uvicorn.Server(config)
+    await server.serve()
 
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
         description='',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-"""
+        epilog=""""""
     )
 
     parser.add_argument(
         '--config', '-c',
         type=str,
-        default="../web_config.json",
-        help='Path to configuration file (default: ../web_config.json)'
+        default="./web_config.json",
+        help='Path to configuration file (default: ./web_config.json)'
     )
 
     parser.add_argument(
@@ -128,18 +136,7 @@ def parse_args():
 
 
 
-async def start_server():
-    args = parse_args()
-
-    myapp = TikUIApp(args.config)
-    await myapp.initialize()
-    app = myapp.app
-    
-    config = uvicorn.Config(app, loop="asyncio")
-    server = uvicorn.Server(config)
-    await server.serve()
-
-
 if __name__ == "__main__":
 # breakpoint()
-    asyncio.run(start_server())
+    args = parse_args()
+    asyncio.run(start_server(args.config))
