@@ -140,7 +140,6 @@ class SessionLogger:
         )
 
     def get_session_statistics(self, date: Optional[str] = None) -> Dict[str, Any]:
-        # TODO: Maybe move this to a separate SessionStats class? This class operates on self.session_log_file
         """Get statistics from session log for a specific date"""
         if date is None:
             date = datetime.now().strftime('%Y%m%d')

@@ -7,14 +7,14 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from config.config_manager import ConfigManager
+# if TYPE_CHECKING:
+from config.config_manager import ConfigManager
 
 
 class StabilityTracker:
     """Tracks stream status stability to prevent rapid cycling"""
 
-    def __init__(self, config_manager: 'ConfigManager'):
+    def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
         self.stream_stability: Dict[str, Dict[str, Any]] = {}

@@ -107,8 +107,11 @@ class StreamRecorder:
             self.logger.error(f"❌ Failed to start recording {username}: {e}")
 
             # Cleanup on failure
-            # Remove from active recordings: TODO: is this correct? We need to decrement dict to allow new recordings
+            # Remove from active recordings
             if username in self.active_recordings:
+                # username should not be present in active_recordings, in case this happens there might be some cleanup
+                # to be performed, but this case does not seem possible at the current state of the software
+                self.logger.warning(f"⚠️  Deleting {username} from active recordings without cleanup (this should not happen)")
                 del self.active_recordings[username]
 
             if self.csv_writer.is_writing(username):

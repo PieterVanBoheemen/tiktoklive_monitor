@@ -18,16 +18,14 @@ from utils.session_logger import SessionLogger
 from utils.status_manager import StatusManager
 from utils.system_utils import check_system_limits, get_open_file_count, check_rate_limit, debug_breakpoint
 
-# TODO: Is this needed? Commenting it out and using ConfigManager without quotes works fine.
-# There are no circular imports here.
-if TYPE_CHECKING:
-    from config.config_manager import ConfigManager
+# if TYPE_CHECKING:
+from config.config_manager import ConfigManager
 
 
 class StreamMonitor:
     """Main stream monitoring coordinator"""
 
-    def __init__(self, config_manager: 'ConfigManager'):
+    def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
         self.monitoring = True
@@ -130,27 +128,37 @@ class StreamMonitor:
 
                 if len(self.recorder.get_active_recordings()) >= self.config_manager.config['settings']['max_concurrent_recordings']:
                     self.logger.info("⏸️  Max concurrent recordings reached, skipping this check cycle")
+                    self.logger.info("Currently recording: " + ", ".join(self.recorder.get_active_recordings().keys()))
                 else:
+                    # initialize list to track actions taken this cycle
+                    actions_taken = []
+                    
                     # Prepare list of streamers to check (exclude currently recording)
-                    check_streamers = dict((k, v) for k, v in enabled_streamers.items() if not self.recorder.is_recording(v['username']))
-
+                    check_streamers = dict((k, v) for k, v in enabled_streamers.items() if not self.recorder.is_recording(k))
                     self.logger.debug(f"🔄 Check cycle #{check_count} - Checking {len(check_streamers)} streamers in parallel...")
+                    
                     # Check streamers that are not currently recording in parallel
                     live_status = await self.stream_checker.check_all_streamers_parallel(check_streamers)
 
-                    # Process results with stability checking
-                    actions_taken = []
-                    for username, is_live in live_status.items():
-                        current_recording = self.recorder.is_recording(username)
+                    if live_status.get('_all_failed', True):
+                        # Throttle if all failed
+                        sec_pause = self.config_manager.config['settings'].get('pause_monitoring_if_failure_seconds', 300)
+                        self.logger.warning(f"⚠️  All streamer checks failed, throttling monitoring temporarily for {sec_pause} seconds")
+                        await self._sleep_with_monitoring_check(sec_pause)
 
-                        # Use stability tracking to determine if action should be taken
-                        should_act = self.stability_tracker.track_stream_stability(username, is_live, current_recording)
+                    else:
+                        # Process results with stability checking
+                        for username, is_live in live_status.items():
+                            current_recording = self.recorder.is_recording(username)
 
-                        if should_act and is_live and not current_recording:
-                            # Start recording
-                            self.logger.info(f"🟢 {username} went LIVE! (stability confirmed)")
-                            asyncio.create_task(self.recorder.start_recording(username))
-                            actions_taken.append(f"{username}:LIVE")
+                            # Use stability tracking to determine if action should be taken
+                            should_act = self.stability_tracker.track_stream_stability(username, is_live, current_recording)
+
+                            if should_act and is_live and not current_recording:
+                                # Start recording
+                                self.logger.info(f"🟢 {username} went LIVE! (stability confirmed)")
+                                asyncio.create_task(self.recorder.start_recording(username))
+                                actions_taken.append(f"{username}:LIVE")
 
                     # Get current state for status updates
                     currently_live = [username for username, is_live in live_status.items() if is_live]
@@ -162,6 +170,8 @@ class StreamMonitor:
 
                     # Update status file
                     status_info = f"Check #{check_count}, duration: {check_duration:.1f}s"
+                    if live_status.get('_all_failed', True):
+                        status_info += ", all checks failed"
                     if pending_disconnects:
                         status_info += f", pending disconnects: {len(pending_disconnects)}"
 
@@ -192,7 +202,8 @@ class StreamMonitor:
                         self.logger.debug(f"Dump of rate limits: {limits_info['rate_limits']}")
                     
                 # Dynamic sleep with interrupt checking
-                await self._sleep_with_monitoring_check(check_duration)
+                base_interval = self.config_manager.config['settings']['check_interval_seconds']
+                await self._sleep_with_monitoring_check(base_interval-check_duration)
 
                 # Check if we should continue
                 if not self.monitoring:
@@ -240,18 +251,15 @@ class StreamMonitor:
         if check_duration > base_interval * 0.8:  # If check takes more than 80% of interval
             self.logger.warning(f"⚠️  Check cycle took {check_duration:.1f}s (target: {base_interval}s)")
 
-    async def _sleep_with_monitoring_check(self, check_duration: float):
+    async def _sleep_with_monitoring_check(self, duration: float):
         """Sleep between checks while remaining responsive to shutdown signals"""
-        base_interval = self.config_manager.config['settings']['check_interval_seconds']
-        adjusted_interval = max(10, base_interval - check_duration)  # Minimum 10 seconds
 
         # Sleep in smaller chunks to be more responsive to shutdown signals
-        # TODO: check logic as adjusted_interval is always >=10 here and therefore the max is redundant
-        sleep_chunks = max(1, int(adjusted_interval))
+        sleep_chunks = max(10, int(duration))
         for _ in range(sleep_chunks):
             if not self.monitoring:
                 break
-            await asyncio.sleep(min(1, adjusted_interval / sleep_chunks))
+            await asyncio.sleep(1)
 
     async def _periodic_cleanup(self):
         """Perform periodic cleanup tasks"""

@@ -18,14 +18,14 @@ from TikTokLive.client.errors import UserNotFoundError
 from utils.system_utils import debug_breakpoint
 from utils.patches import patch_TikTokLiveClient
 
-if TYPE_CHECKING:
-    from config.config_manager import ConfigManager
+# if TYPE_CHECKING:
+from config.config_manager import ConfigManager
 
 
 class StreamChecker:
     """Handles checking stream status for multiple streamers"""
 
-    def __init__(self, config_manager: 'ConfigManager'):
+    def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
         self.clients = {}
@@ -138,8 +138,7 @@ class StreamChecker:
         timeout = self.config_manager.config['settings'].get('individual_check_timeout', 20)
         batch_size = self.config_manager.config['settings'].get('batch_size', 50)
 
-        async def check_single_streamer_with_timeout(streamer_config: dict):
-            username = streamer_config['username']
+        async def check_single_streamer_with_timeout(username: str):
             try:
                 # Use individual timeout per streamer
                 is_live = await asyncio.wait_for(
@@ -156,23 +155,23 @@ class StreamChecker:
                 return username, False
 
         # Split streamers into batches
-        streamer_configs = [streamer_config for _key, streamer_config in enabled_streamers.items()]
-        total_streamers = len(streamer_configs)
+        streamers = [key for key in enabled_streamers.keys()]
+        total_streamers = len(streamers)
         live_status = {}
 
         self.logger.info(f"🔄 Processing {total_streamers} streamers in batches of {batch_size}")
 
         total_batches = (total_streamers + batch_size - 1) // batch_size
         for i in range(0, total_streamers, batch_size):
-            batch = streamer_configs[i:i + batch_size]
+            batch = streamers[i:i + batch_size]
             batch_num = (i // batch_size) + 1
             
             self.logger.info(f"📦 Processing batch {batch_num}/{total_batches} ({len(batch)} streamers)")
 
             # Create tasks for current batch
             tasks = [
-                check_single_streamer_with_timeout(streamer_config)
-                for streamer_config in batch
+                check_single_streamer_with_timeout(username)
+                for username in batch
             ]
 
             try:
@@ -198,15 +197,14 @@ class StreamChecker:
             except Exception as e:
                 self.logger.warning(f"⚠️  Error in batch {batch_num}: {e}")
                 # Mark failed batch streamers as offline
-                for streamer_config in batch:
-                    live_status[streamer_config['username']] = False
+                for username in batch:
+                    live_status[username] = False
 
-        # Check if all streamers failed and in case throttle monitoring
-        if not any(not self.clients[username]['failed'] for username in self.clients):
-            sec_pause = self.config_manager.config['settings'].get('pause_monitoring_if_failure_seconds', 300)
-            self.logger.warning("⚠️  All streamer checks failed, throttling monitoring temporarily for {sec_pause} seconds")
-            
-            await asyncio.sleep(sec_pause)  # Throttle if all failed
+        # Check if all streamers failed and in case inform monitoring
+        if len(self.clients) > 0 and not any(not self.clients[username]['failed'] for username in self.clients):
+            live_status['_all_failed'] = True
+        else:
+            live_status['_all_failed'] = False
 
         return live_status
 
