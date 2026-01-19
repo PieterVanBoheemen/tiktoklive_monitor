@@ -163,9 +163,9 @@ async def main():
         monitor = StreamMonitor(config_manager)
 
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(start_server())
+            tg.create_task(start_server(args.config))
             tg.create_task(monitor.run())
-
+                
     except FileNotFoundError as e:
         logger.error(f"❌ Configuration file not found: {e}")
         sys.exit(1)
@@ -197,3 +197,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n👋 Monitor stopped by user")
         sys.exit(0)
+    except Exception as e:
+        print(f"❌ Fatal error in main execution: {e}")
+        sys.exit(1)
