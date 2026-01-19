@@ -128,11 +128,12 @@ class StreamMonitor:
                 check_count += 1
                 start_time = asyncio.get_event_loop().time()
 
-                self.logger.debug(f"🔄 Check cycle #{check_count} - Checking {len(enabled_streamers)} streamers in parallel...")
-                
+                # Prepare list of streamers to check (exclude currently recording)
+                check_streamers = dict((k, v) for k, v in enabled_streamers.items() if not self.recorder.is_recording(v['username']))
 
-                # Check all streamers in parallel
-                live_status = await self.stream_checker.check_all_streamers_parallel(enabled_streamers)
+                self.logger.debug(f"🔄 Check cycle #{check_count} - Checking {len(check_streamers)} streamers in parallel...")
+                # Check streamers that are not currently recording in parallel
+                live_status = await self.stream_checker.check_all_streamers_parallel(check_streamers)
 
                 # Process results with stability checking
                 actions_taken = []
@@ -170,7 +171,7 @@ class StreamMonitor:
 
                 # Status logging with cleaner output
                 self._log_monitoring_status(
-                    check_count, len(enabled_streamers), currently_live,
+                    check_count, len(check_streamers), currently_live,
                     currently_recording, pending_disconnects, check_duration,
                     actions_taken, config_changed
                 )
@@ -209,7 +210,7 @@ class StreamMonitor:
                              pending_disconnects: List[str], check_duration: float,
                              actions_taken: List[str], config_changed: bool):
         """Log monitoring status with appropriate verbosity"""
-        status_msg_parts = [f"📊 Checked {total_streamers} streamers"]
+        status_msg_parts = [f"📊 Checked {total_streamers} non-recording streamers"]
 
         if config_changed:
             status_msg_parts.append("🔄 Config reloaded")

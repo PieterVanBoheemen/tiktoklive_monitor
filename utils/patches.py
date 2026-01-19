@@ -13,6 +13,8 @@ from TikTokLive.client.errors import UserNotFoundError
 from TikTokLive.client.web.routes.fetch_room_id_live_html import FailedParseRoomIdError
 from TikTokLive.client.web.web_base import ClientRoute, TikTokHTTPClient
 from TikTokLive.client.web.web_settings import WebDefaults
+from TikTokLive.proto import User
+from TikTokLive.proto.custom_proto import ExtendedUser
 
 from utils.system_utils import debug_breakpoint
 
@@ -114,9 +116,39 @@ def _stop(self) -> None:
     self._thread = None
 
 
+def _from_user(cls, user: User, **kwargs) -> ExtendedUser:
+    """
+    Convert a user to an ExtendedUser object
+
+    :param user: Original user object
+    :param kwargs: Any kwargs to pass
+    :return: ExtendedUser instance
+    """
+    # debug_breakpoint()
+    if isinstance(user, ExtendedUser):
+        return user
+    try:
+        return ExtendedUser(**user.to_pydict(**kwargs))
+    except (AttributeError, TypeError):
+        user_dict = {}
+        for field in user.__class__.__dataclass_fields__:
+            try:
+                user_dict[field] = getattr(user, field)
+            except AttributeError as e:
+                if "is set to None" in str(e):
+                    underlying_attr = f"_{field}"
+                    if hasattr(user, underlying_attr):
+                        user_dict[field] = getattr(user, underlying_attr)
+                    else:
+                        user_dict[field] = None
+                else:
+                    raise
+        return ExtendedUser(**user_dict)
+
 def patch_TikTokLiveClient(client: TikTokLiveClient):
     """Apply all patches to TikTokLiveClient"""
     # Override the stop method to avoid exception since apparently sometimes the video writing process has already terminated
     client.web.fetch_video_data.stop = types.MethodType(_stop, client.web.fetch_video_data)
     # Override fetch_user_room_data method to have error handling for httpx exceptions
     sys.modules[client._web.fetch_is_live.__class__.__module__].FetchRoomIdAPIRoute.fetch_user_room_data = classmethod(_fetch_user_room_data)
+    ExtendedUser.from_user = classmethod(_from_user)

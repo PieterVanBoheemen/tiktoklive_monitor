@@ -45,12 +45,11 @@ class StreamChecker:
 
                 # Reuse existing client if available
                 if username in self.clients:
-                    client = self.clients[username]
+                    client = self.clients[username]['client']
                 else:
                     client = TikTokLiveClient(unique_id=username)
                     patch_TikTokLiveClient(client)
-                    self.clients[username] = client
-
+                    self.clients[username] = {'client': client, 'failed': False}
                 # Set session ID if available
                 session_id = self.config_manager.get_session_id_for_streamer(username)
                 tt_target_idc = self.config_manager.get_target_idc_for_streamer(username)
@@ -64,6 +63,7 @@ class StreamChecker:
                 if attempt > 0:  # Log successful retry
                     self.logger.debug(f"✅ Status check succeeded for {username} on attempt {attempt + 1}")
 
+                self.clients[username]['failed'] = False
                 return is_live
 
             except asyncio.TimeoutError:
@@ -73,6 +73,7 @@ class StreamChecker:
                     continue
                 else:
                     self.logger.error(f"❌ Final asynch timeout checking {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
                     return False
             except httpx.ReadTimeout:
                 if attempt < max_retries:
@@ -81,6 +82,25 @@ class StreamChecker:
                     continue
                 else:
                     self.logger.error(f"❌ Final network timeout checking {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
+                    return False
+            except httpx.ConnectError:
+                if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Network connect error checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
+                    continue
+                else:
+                    self.logger.error(f"❌ Final network connect error checking {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
+                    return False
+            except httpx.ConnectTimeout:
+                if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Network connect timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
+                    continue
+                else:
+                    self.logger.error(f"❌ Final network connect timeout checking {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
                     return False
             except FailedParseRoomIdError as e:
                 if attempt < max_retries:
@@ -89,6 +109,7 @@ class StreamChecker:
                     continue
                 else:
                     self.logger.error(f"❌ Final failed to parse room ID for {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
                     return False
             except UserNotFoundError as e:
                 if attempt < max_retries:
@@ -97,6 +118,7 @@ class StreamChecker:
                     continue
                 else:
                     self.logger.error(f"❌ Final user not found for {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
                     return False
             except Exception as e:
                 debug_breakpoint()
@@ -106,6 +128,7 @@ class StreamChecker:
                     continue
                 else:
                     self.logger.error(f"❌ Final unknown error checking {username}: {e}")
+                    self.clients[username]['failed'] = True
                     return False
 
         return False
@@ -125,10 +148,11 @@ class StreamChecker:
                 )
                 return username, is_live
             except asyncio.TimeoutError:
-                self.logger.debug(f"Individual timeout for {username}")
+                self.logger.warning(f"Individual timeout for {username}")
                 return username, False
             except Exception as e:
-                self.logger.debug(f"Error in parallel check for {username}: {e}")
+                # Catch-all for any unexpected errors, should not happen because check_streamer_status handles its own errors
+                self.logger.warning(f"Error in parallel check for {username}: {e}")
                 return username, False
 
         # Split streamers into batches
@@ -165,7 +189,7 @@ class StreamChecker:
                             if username in self.clients:
                                 del self.clients[username]  # Remove client to avoid accumulating TikTokLiveClient instances
                     elif isinstance(result, Exception):
-                        self.logger.debug(f"Task exception: {result}")
+                        self.logger.warning(f"Task exception: {result}")
 
                 # Brief pause between batches to avoid overwhelming the API
                 if i + batch_size < total_streamers:
@@ -176,6 +200,13 @@ class StreamChecker:
                 # Mark failed batch streamers as offline
                 for streamer_config in batch:
                     live_status[streamer_config['username']] = False
+
+        # Check if all streamers failed and in case throttle monitoring
+        if not any(not self.clients[username]['failed'] for username in self.clients):
+            sec_pause = self.config_manager.config['settings'].get('pause_monitoring_if_failure_seconds', 300)
+            self.logger.warning("⚠️  All streamer checks failed, throttling monitoring temporarily for {sec_pause} seconds")
+            
+            await asyncio.sleep(sec_pause)  # Throttle if all failed
 
         return live_status
 

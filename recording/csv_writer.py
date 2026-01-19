@@ -99,8 +99,8 @@ class CSVWriter:
             getattr(event.user, 'nickname', ''),
             event.gift.name,
             event.repeat_count,
-            event.gift.streakable,
-            event.streaking
+            getattr(event.gift, 'streakable', False),
+            getattr(event, 'streaking', False)
         ])
 
     def write_follow(self, username: str, event) -> bool:
