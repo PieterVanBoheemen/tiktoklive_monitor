@@ -128,53 +128,56 @@ class StreamMonitor:
                 check_count += 1
                 start_time = asyncio.get_event_loop().time()
 
-                # Prepare list of streamers to check (exclude currently recording)
-                check_streamers = dict((k, v) for k, v in enabled_streamers.items() if not self.recorder.is_recording(v['username']))
+                if len(self.recorder.get_active_recordings()) >= self.config_manager.config['settings']['max_concurrent_recordings']:
+                    self.logger.info("⏸️  Max concurrent recordings reached, skipping this check cycle")
+                else:
+                    # Prepare list of streamers to check (exclude currently recording)
+                    check_streamers = dict((k, v) for k, v in enabled_streamers.items() if not self.recorder.is_recording(v['username']))
 
-                self.logger.debug(f"🔄 Check cycle #{check_count} - Checking {len(check_streamers)} streamers in parallel...")
-                # Check streamers that are not currently recording in parallel
-                live_status = await self.stream_checker.check_all_streamers_parallel(check_streamers)
+                    self.logger.debug(f"🔄 Check cycle #{check_count} - Checking {len(check_streamers)} streamers in parallel...")
+                    # Check streamers that are not currently recording in parallel
+                    live_status = await self.stream_checker.check_all_streamers_parallel(check_streamers)
 
-                # Process results with stability checking
-                actions_taken = []
-                for username, is_live in live_status.items():
-                    current_recording = self.recorder.is_recording(username)
+                    # Process results with stability checking
+                    actions_taken = []
+                    for username, is_live in live_status.items():
+                        current_recording = self.recorder.is_recording(username)
 
-                    # Use stability tracking to determine if action should be taken
-                    should_act = self.stability_tracker.track_stream_stability(username, is_live, current_recording)
+                        # Use stability tracking to determine if action should be taken
+                        should_act = self.stability_tracker.track_stream_stability(username, is_live, current_recording)
 
-                    if should_act and is_live and not current_recording:
-                        # Start recording
-                        self.logger.info(f"🟢 {username} went LIVE! (stability confirmed)")
-                        asyncio.create_task(self.recorder.start_recording(username))
-                        actions_taken.append(f"{username}:LIVE")
+                        if should_act and is_live and not current_recording:
+                            # Start recording
+                            self.logger.info(f"🟢 {username} went LIVE! (stability confirmed)")
+                            asyncio.create_task(self.recorder.start_recording(username))
+                            actions_taken.append(f"{username}:LIVE")
 
-                # Get current state for status updates
-                currently_live = [username for username, is_live in live_status.items() if is_live]
-                currently_recording = list(self.recorder.active_recordings.keys())
-                pending_disconnects = list(self.recorder.pending_disconnects.keys())
+                    # Get current state for status updates
+                    currently_live = [username for username, is_live in live_status.items() if is_live]
+                    currently_recording = list(self.recorder.active_recordings.keys())
+                    pending_disconnects = list(self.recorder.pending_disconnects.keys())
 
-                # Calculate check duration
-                check_duration = asyncio.get_event_loop().time() - start_time
+                    # Calculate check duration
+                    check_duration = asyncio.get_event_loop().time() - start_time
 
-                # Update status file
-                status_info = f"Check #{check_count}, duration: {check_duration:.1f}s"
-                if pending_disconnects:
-                    status_info += f", pending disconnects: {len(pending_disconnects)}"
+                    # Update status file
+                    status_info = f"Check #{check_count}, duration: {check_duration:.1f}s"
+                    if pending_disconnects:
+                        status_info += f", pending disconnects: {len(pending_disconnects)}"
 
-                self.status_manager.update_status_file(
-                    "monitoring",
-                    status_info,
-                    currently_recording,
-                    pending_disconnects
-                )
+                    self.status_manager.update_status_file(
+                        "monitoring",
+                        status_info,
+                        currently_recording,
+                        pending_disconnects
+                    )
 
-                # Status logging with cleaner output
-                self._log_monitoring_status(
-                    check_count, len(check_streamers), currently_live,
-                    currently_recording, pending_disconnects, check_duration,
-                    actions_taken, config_changed
-                )
+                    # Status logging with cleaner output
+                    self._log_monitoring_status(
+                        check_count, len(check_streamers), currently_live,
+                        currently_recording, pending_disconnects, check_duration,
+                        actions_taken, config_changed
+                    )
 
                 # Periodic cleanup
                 if check_count % 50 == 0:  # Every 50 cycles
