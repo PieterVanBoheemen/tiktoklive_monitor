@@ -91,6 +91,7 @@ python3 main.py -c config.json -i 30 -o /recordings --verbose
 | `-d, --data-center` | TikTok data center | `-d eu-ttp2` |
 | `-i, --check-interval` | Check interval (seconds) | `-i 45` |
 | `-o, --output-dir` | Output directory | `-o /recordings` |
+| `-t, --test` | Test mode (activates breakpoints for debugging purposes) | `-t` |
 | `-v, --verbose` | Enable verbose logging | `-v` |
 
 ### Runtime Control
@@ -113,15 +114,13 @@ cat monitor_status.txt
 ```json
 {
   "streamers": {
-    "creator1": {
-      "username": "@creator1",
+    "@creator1": {
       "enabled": true,
       "session_id": null,
       "tags": ["gaming", "research"],
       "notes": "Popular gaming streamer"
     },
-    "creator2": {
-      "username": "@creator2",
+    "@creator2": {
       "enabled": true,
       "session_id": "custom_session_id",
       "tags": ["music"],
@@ -130,11 +129,17 @@ cat monitor_status.txt
   },
   "settings": {
     "check_interval_seconds": 60,
-    "max_concurrent_recordings": 5,
+    "max_concurrent_recordings": 15,
+    "pause_monitoring_if_failure_seconds": 300,
     "output_directory": "recordings",
     "session_id": "global_session_id",
+    "tt_target_idc": "us-eastred",
+    "whitelist_sign_server": "tiktok.eulerstream.com",
     "stability_threshold": 3,
-    "min_action_cooldown_seconds": 90
+    "min_action_cooldown_seconds": 90,
+    "disconnect_confirmation_delay_seconds": 30,
+    "individual_check_timeout": 20,
+    "max_retries": 2
   }
 }
 ```
@@ -142,7 +147,6 @@ cat monitor_status.txt
 ### Configuration Options
 
 #### Streamer Settings
-- **`username`** - TikTok username (with @)
 - **`enabled`** - Whether to monitor this streamer
 - **`session_id`** - Individual session ID (overrides global)
 - **`tags`** - Categories for organization
@@ -151,9 +155,16 @@ cat monitor_status.txt
 #### Global Settings
 - **`check_interval_seconds`** - How often to check if streamers are live
 - **`max_concurrent_recordings`** - Maximum simultaneous recordings
+- **`pause_monitoring_if_failure_seconds`** - Time to pause the monitor if TikTok is banning requests
+- **`output_directory`** - Directory to store the recordings
+- **`session_id`** - Session ID to access 18+ content
+- **`tt_target_idc`** - The data center holding the user's account credentials (e.g. eu-ttp2)
+- **`whitelist_sign_server`** - The Sign server to sign requests to TikTok
 - **`stability_threshold`** - Consecutive checks before starting recording
 - **`min_action_cooldown_seconds`** - Minimum time between actions
 - **`disconnect_confirmation_delay_seconds`** - Time to wait before confirming disconnect
+- **`individual_check_timeout`** - Time to wait for the reply to a request to see whether a user is live
+- **`max_retries`** - How many times to retry a request to see whether a user is live
 
 ## 📂 Output Files
 
@@ -385,6 +396,7 @@ tiktoklive_monitor/
     ├── status_manager.py      # Status file management
     ├── system_utils.py        # System utilities
     └── file_utils.py          # File operations
+    └── patches.py             # Patches for TikTokLiveClient
 ```
 
 ### Submitting Changes
