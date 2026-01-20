@@ -1,7 +1,7 @@
 import argparse
 import asyncio
 import json
-import threading
+import logging
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -15,10 +15,11 @@ PRIORITY_GROUPS = ["high", "medium", "low"]
 
 class TikUIApp:
     def __init__(self, monitor: StreamMonitor):
+        self.logger = logging.getLogger(__name__)
         self.lock = asyncio.Lock()
         self.monitor = monitor
         self.str_state = {
-            "streamers": {},
+            'streamers': {},
             "settings": {}
         }
         
@@ -26,7 +27,6 @@ class TikUIApp:
 
     async def initialize(self):
 
-        await self.load_config()
         await self.update_status()
         await self.setup_routes()
 
@@ -34,8 +34,9 @@ class TikUIApp:
         return self.monitor.config_manager.get_streamers().items()
     
     # ---------- Load / Save ----------
-    async def load_config(self) -> None:
-        
+    async def load_streamers(self) -> None:
+        # breakpoint()
+        # async with self.lock:
         for k,v in self._get_streamers():
             self.str_state['streamers'][k] = v
 
@@ -48,20 +49,22 @@ class TikUIApp:
             json.dump(self.str_state, f, indent=2)
 
     async def update_status(self):
-        async with self.lock:
-            recorded = self.monitor.active_recordings
-            live = self.monitor.live_streamers
-            # breakpoint()
-            for k in self.str_state['streamers']:
-                if k in live:
-                    self.str_state['streamers'][k]["is_live"] = True
-                else:
-                    self.str_state['streamers'][k]["is_live"] = False
-                if k in recorded:
-                    self.str_state['streamers'][k]["is_recording"] = True
-                    self.str_state['streamers'][k]["is_recording"] = True
-                else:
-                    self.str_state['streamers'][k]["is_recording"] = False
+        await self.load_streamers()
+        recorded = self.monitor.active_recordings
+        live = self.monitor.live_streamers
+        # breakpoint()
+        for k in self.str_state['streamers']:
+            if k in live:
+                self.str_state['streamers'][k]['is_live'] = True
+            else:
+                self.str_state['streamers'][k]['is_live'] = False
+            if k in recorded:
+                self.str_state['streamers'][k]['is_recording'] = True
+                self.str_state['streamers'][k]['is_live'] = True
+            else:
+                self.str_state['streamers'][k]['is_recording'] = False
+            if self.str_state['streamers'][k]['is_live'] or self.str_state['streamers'][k]['is_recording']:
+                self.logger.info(f"User {k} is live: {self.str_state['streamers'][k]['is_live']}, is recording: {self.str_state['streamers'][k]['is_recording']}")
                 
 
 
@@ -76,19 +79,19 @@ class TikUIApp:
         
         @self.app.get("/api/streamers")
         async def get_streamers():
-            await self.update_status()
-            grouped = {g: [] for g in PRIORITY_GROUPS}
-
             async with self.lock:
-                # breakpoint()
-                for name, s in self.str_state["streamers"].items():
-                    # breakpoint()
-                    grouped[s["priority_group"]].append((name, s))
+                await self.update_status()
+                return self.str_state['streamers']
+                # grouped = {g: [] for g in PRIORITY_GROUPS}
+                # # breakpoint()
+                # for name, s in self.str_state['streamers'].items():
+                #     # breakpoint()
+                #     grouped[s['priority_group']].append((name, s))
 
-            for g in grouped:
-                grouped[g].sort(key=lambda x: x[1]["priority"])
+                # for g in grouped:
+                #     grouped[g].sort(key=lambda x: x[1]['priority'])
 
-            return grouped
+                # return grouped
 
         @self.app.post("/api/reorder/{group}")
         async def reorder(group: str, request: Request):
@@ -96,19 +99,19 @@ class TikUIApp:
 
             async with self.lock:
                 for idx, name in enumerate(order):
-                    s = self.str_state["streamers"][name]
-                    s["priority_group"] = group
-                    s["priority"] = idx
+                    s = self.str_state['streamers'][name]
+                    s['priority_group'] = group
+                    s['priority'] = idx
 
             return {"ok": True}
 
 
-        @self.app.post("/api/toggle/{name}")
-        async def toggle(name: str):
+        @self.app.post("/api/toggle_enable/{name}")
+        async def toggle_enable(name: str):
             async with self.lock:
-                s = self.str_state["streamers"][name]
-                s["enabled"] = not s["enabled"]
-            return {"enabled": s["enabled"]}
+                s = self.str_state['streamers'][name]
+                s['enabled'] = not s['enabled']
+            return {'enabled': s['enabled']}
 
 
         @self.app.post("/api/save")
@@ -127,7 +130,7 @@ async def start_server(config_manager):
     await myapp.initialize()
     app = myapp.app
     
-    srv_config = uvicorn.Config(app, loop="asyncio", log_config=None, reload=True)
+    srv_config = uvicorn.Config(app, loop="asyncio", log_config=None, reload=True, reload_dirs="./")
     server = uvicorn.Server(srv_config)
     await server.serve()
 

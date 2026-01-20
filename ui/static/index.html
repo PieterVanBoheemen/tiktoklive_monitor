@@ -4,11 +4,15 @@
   <meta charset="utf-8">
   <title>Streamer Priority Manager</title>
   <script src="static/Sortable.min.js"></script>
+  <script src="static/streamers.js"></script>
   <link rel="stylesheet" href="static/streamers.css">
 </head>
 <body>
 
-<h2>Priority Groups</h2>
+<h2>Streamers Dashboard</h2>
+<button id="hidDis" onclick="toggleViewDisabled()">Hide Disabled</button>
+<button id="hidOff" onclick="toggleViewOffline()">Hide Offline</button>
+<button onclick="openAddModal()">Add Streamer</button>
 <button onclick="save()">Save to file</button>
 
 <div class="container">
@@ -26,71 +30,43 @@
   </div>
 </div>
 
+
+<!-- Add Streamer Modal -->
+<div id="addModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Add Streamer</h3>
+
+    <input id="new-username" placeholder="@username" />
+    <select id="new-priority-group">
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+    <input id="new-tags" placeholder="tags (comma-separated)" />
+    <input id="new-notes" placeholder="notes" />
+    <select id="new-enabled">
+      <option value="enabled">Enabled</option>
+      <option value="disabled">Disabled</option>
+    </select>
+
+
+    <div class="modal-buttons">
+      <button onclick="confirmAddStreamer()">Add</button>
+      <button onclick="closeAddModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Message Modal -->
+<div id="msgModal" class="modal hidden">
+  <div class="modal-content">
+    <p id="msgText"></p>
+    <button onclick="closeMsgModal()">OK</button>
+  </div>
+</div>
+
 <script>
-async function load() {
-  const res = await fetch("/api/streamers");
-  const data = await res.json();
-
-  ["high", "medium", "low"].forEach(g => {
-    const ul = document.getElementById(g);
-    ul.innerHTML = "";
-
-    data[g].forEach(([name, s]) => {
-      const li = document.createElement("li");
-      
-      let classes = ["item"];
-
-      if (!s.enabled) classes.push("disabled");
-      if (s.is_recording) {
-        classes.push("recording");
-      } else {
-        classes.push("not-recording");
-      }
-
-      li.className = classes.join(" ");
-
-      li.dataset.name = name;
-      li.innerHTML = `
-        <b>${name}</b><br>
-        priority: ${s.priority}<br>
-        tags: ${s.tags.join(", ")}<br>
-        notes: ${s.notes}<br>
-        <button onclick="toggle('${name}')">toggle</button>
-      `;
-      ul.appendChild(li);
-    });
-  });
-}
-
-async function reorder(group, ul) {
-  const order = [...ul.children].map(li => li.dataset.name);
-  await fetch(`/api/reorder/${group}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(order)
-  });
-}
-
-async function toggle(name) {
-  await fetch(`/api/toggle/${name}`, { method: "POST" });
-  load();
-}
-
-async function save() {
-  await fetch("/api/save", { method: "POST" });
-  alert("saved");
-}
-
-["high", "medium", "low"].forEach(g => {
-  new Sortable(document.getElementById(g), {
-    group: "priority",
-    animation: 150,
-    onEnd: () => reorder(g, document.getElementById(g))
-  });
-});
-
-load();
+show_streamers();
 </script>
-
 </body>
 </html>

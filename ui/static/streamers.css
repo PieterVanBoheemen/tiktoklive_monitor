@@ -15,8 +15,35 @@ body { font-family: sans-serif; }
     background: #f8f8f8;
     cursor: grab;
 }
+.item span.username {
+    font-weight: bold;
+}
+.item span.priority {
+    font-style: normal;
+    font-size: smaller;
+}
+
+.item span.tags {
+    font-style: italic;
+    font-size: normal;
+}
+.item span.notes {
+    font-style: normal;
+    font-size: small;
+}
 .disabled {
     opacity: 0.4;
+}
+
+.item.live {
+  background-color: #cdedcd;
+  border-color: #00cc00;
+}
+
+.item.live::after {
+  content: " ● LIVE";
+  color: #00cc00;
+  font-weight: bold;
 }
 
 .item.recording {
@@ -24,12 +51,44 @@ body { font-family: sans-serif; }
   border-color: #cc0000;
 }
 
-.item.not-recording {
-  background-color: #f8f8f8;
-}
-
 .item.recording::after {
   content: " ● REC";
   color: #cc0000;
   font-weight: bold;
 }
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 16px;
+  border-radius: 6px;
+  width: 320px;
+}
+
+.modal-content input,
+.modal-content select {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: space-between;
+}
+
