@@ -29,6 +29,7 @@ class StreamMonitor:
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
         self.monitoring = True
+        self.live_status = {}
 
         # Initialize components
         self.session_logger = SessionLogger()
@@ -138,9 +139,9 @@ class StreamMonitor:
                     self.logger.debug(f"🔄 Check cycle #{check_count} - Checking {len(check_streamers)} streamers in parallel...")
                     
                     # Check streamers that are not currently recording in parallel
-                    live_status = await self.stream_checker.check_all_streamers_parallel(check_streamers)
+                    self.live_status = await self.stream_checker.check_all_streamers_parallel(check_streamers)
 
-                    if live_status.get('_all_failed', True):
+                    if self.live_status.get('_all_failed', True):
                         # Throttle if all failed
                         sec_pause = self.config_manager.config['settings'].get('pause_monitoring_if_failure_seconds', 300)
                         self.logger.warning(f"⚠️  All streamer checks failed, throttling monitoring temporarily for {sec_pause} seconds")
@@ -148,7 +149,7 @@ class StreamMonitor:
 
                     else:
                         # Process results with stability checking
-                        for username, is_live in live_status.items():
+                        for username, is_live in self.live_status.items():
                             current_recording = self.recorder.is_recording(username)
 
                             # Use stability tracking to determine if action should be taken
@@ -161,7 +162,7 @@ class StreamMonitor:
                                 actions_taken.append(f"{username}:LIVE")
 
                     # Get current state for status updates
-                    currently_live = [username for username, is_live in live_status.items() if is_live]
+                    currently_live = [username for username, is_live in self.live_status.items() if is_live]
                     currently_recording = list(self.recorder.active_recordings.keys())
                     pending_disconnects = list(self.recorder.pending_disconnects.keys())
 
@@ -170,7 +171,7 @@ class StreamMonitor:
 
                     # Update status file
                     status_info = f"Check #{check_count}, duration: {check_duration:.1f}s"
-                    if live_status.get('_all_failed', True):
+                    if self.live_status.get('_all_failed', True):
                         status_info += ", all checks failed"
                     if pending_disconnects:
                         status_info += f", pending disconnects: {len(pending_disconnects)}"
@@ -308,6 +309,11 @@ class StreamMonitor:
     def pending_disconnects(self) -> Dict[str, any]:
         """Get pending disconnects"""
         return self.recorder.pending_disconnects
+    
+    @property
+    def live_streamers(self) -> list[str]:
+        """Get streamers who are live"""
+        return [username for username, is_live in self.live_status.items() if is_live]
 
     def update_status_file(self, status: str, extra_info: str = ""):
         """Update status file (for backward compatibility)"""

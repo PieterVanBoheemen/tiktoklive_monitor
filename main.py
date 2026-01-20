@@ -112,26 +112,6 @@ def print_startup_info(args):
     print()
 
 
-def apply_command_line_overrides(config_manager, args):
-    """Apply command line argument overrides to configuration"""
-    # TODO: decide what command line arguments should be reinstated when check_config_changes is run,
-    # at the moment just the session id but not the parameters in this function, and in case
-    # refactor ConfigManager to accept args directly, keep them and reinstate them on reload
-    logger = logging.getLogger(__name__)
-
-    if args.data_center:
-        config_manager.config['settings']['tt_target_idc'] = args.data_center
-        logger.info(f"🌍 Data center overridden to: {args.data_center}")
-
-    if args.check_interval:
-        config_manager.config['settings']['check_interval_seconds'] = args.check_interval
-        logger.info(f"⏱️  Check interval overridden to: {args.check_interval}s")
-
-    if args.output_dir:
-        config_manager.config['settings']['output_directory'] = args.output_dir
-        logger.info(f"📁 Output directory overridden to: {args.output_dir}")
-
-
 async def main():
     """Main entry point"""
     args = parse_args()
@@ -151,19 +131,13 @@ async def main():
 
     try:
         # Initialize configuration manager
-        config_manager = ConfigManager(
-            config_file=args.config,
-            session_id_override=args.session_id
-        )
-
-        # Apply command line overrides
-        apply_command_line_overrides(config_manager, args)
+        config_manager = ConfigManager(args)
 
         # Create and run the stream monitor
         monitor = StreamMonitor(config_manager)
 
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(start_server(args.config))
+            tg.create_task(start_server(monitor))
             tg.create_task(monitor.run())
                 
     except FileNotFoundError as e:
