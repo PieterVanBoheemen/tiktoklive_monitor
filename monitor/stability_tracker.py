@@ -87,7 +87,7 @@ class StabilityTracker:
 
         return False
 
-    def update_config(self, config_manager: 'ConfigManager'):
+    def update_config(self, config_manager: ConfigManager):
         """Update stability settings when config changes"""
         self.config_manager = config_manager
         old_threshold = self.stability_threshold
