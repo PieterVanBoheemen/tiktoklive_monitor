@@ -7,10 +7,27 @@ function make_item(username, priority, tags, notes, enabled) {
     <span class="priority">Priority: ${priority}</span><br>
     <span class="tags">Tags: ${tags.join(", ")}</span><br>
     <span class="notes">Notes: ${notes}</span><br>
-    <button onclick="toggleEnable('${username}')">
+    <button onclick="toggleEnable('${username}','${enabled}')">
       ${enabled ? "Disable" : "Enable"}
     </button>
   `;
+}
+
+function normalizeUsername(raw) {
+  
+  username = raw
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/^@+/, "@");
+  
+  if (!username){
+    return "";
+  }
+  if (!username.startsWith("@")) {
+    username = "@" + raw;
+  }
+
+  return username;
 }
 
 async function load_streamers() {
@@ -76,10 +93,26 @@ async function reorder(group, ul) {
   });
 }
 
-async function toggleEnable(name) {
-  await fetch(`/api/toggle_enable/${name}`, { method: "POST" });
-  show_streamers();
+async function toggleEnable(name, toDisable) {
+  enable = toDisable=="true" ? false : true;
+  const resp = await fetch("/api/toggle_enable", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    name: name,
+    enable: enable
+  })
+});
+  const resp_json = await resp.json();
+  if (!resp_json.ok) {
+    showMessage(resp_json.error);
+    return;
+  }else{
+    show_streamers();
+  }
+  return;
 }
+
 async function toggleViewDisabled() {
   btn_hideDisabled = !btn_hideDisabled;
   const btn = document.getElementById("hidDis");
@@ -103,8 +136,15 @@ async function toggleViewOffline() {
 }
 
 async function save() {
-  await fetch("/api/save", { method: "POST" });
-  alert("saved");
+  const resp = await fetch("/api/save", { method: "POST" });
+  const resp_json = await resp.json();
+  if (!resp_json.ok) {
+    showMessage(resp_json.error);
+  }else{
+    showMessage("Current configuration saved to file");
+    
+  }
+  return;
 }
 
 
@@ -127,7 +167,12 @@ function closeMsgModal() {
 }
 
 async function confirmAddStreamer() {
-  let username = document.getElementById("new-username").value.trim();
+  let username = normalizeUsername(document.getElementById("new-username").value);
+  if (!username) {
+    showMessage("Username cannot be empty.");
+    return;
+  }
+
   const priorityGroup = document.getElementById("new-priority-group").value;
   const tags = document.getElementById("new-tags").value
     .split(",")
@@ -135,22 +180,36 @@ async function confirmAddStreamer() {
     .filter(Boolean);
   const notes = document.getElementById("new-notes").value.trim();
   const enabled = document.getElementById("new-enabled").value;
-
-  if (!username) {
-    showMessage("Username cannot be empty.");
-    return;
-  }
-
-  if (!username.startsWith("@")) {
-    username = "@" + username;
-  }
-
-    const data = await load_streamers();
+  
+  const data = await load_streamers();
   if (data && data[username]) {
-    showMessage(`User ${username} already exists.`);
+    if (data[username].enabled){
+      showMessage(`User ${username} already exists and is enabled.`);
+    }else{
+      showMessage(`User ${username} already exists but is disabled.`);
+    }
+
     return;
   }
   
+  const resp = await fetch("/api/add_streamer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username,
+      priority_group: priorityGroup,
+      tags,
+      notes,
+      enabled
+    })
+  });
+  
+  const resp_json = await resp.json();
+  if (!resp_json.ok) {
+    showMessage(resp_json.error);
+    return;
+  }
+
   show_streamers();
   closeAddModal();
   showMessage(`Streamer ${username} added successfully.`);

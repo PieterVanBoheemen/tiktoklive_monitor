@@ -225,6 +225,39 @@ class ConfigManager:
         """Get all streamers from configuration"""
         return self.config['streamers']
     
+    def get_settings(self) -> Dict[str, dict]:
+        """Get the current settings"""
+        return self.config['settings']
+    
+    def enable_streamer(self, streamer:str) -> bool:
+        """Enable a streamer"""
+        if not streamer in self.config['streamers']:
+            self.logger.error(f"Trying to enable a non-existing streamer {streamer}")
+            return False
+        else:
+            self.config['streamers'][streamer]['enabled'] = True
+        return True
+    
+    def disable_streamer(self, streamer:str) -> bool:
+        """Disable a streamer"""
+        if not streamer in self.config['streamers']:
+            self.logger.error(f"Trying to disable a non-existing streamer {streamer}")
+            return False
+        else:
+            self.config['streamers'][streamer]['enabled'] = False
+        return True
+    
+    def add_streamer(self, streamer:dict[str,any]) -> bool:
+        """Get all streamers from configuration"""
+        # get the only key in the dict, the username
+        key = next(iter(streamer))
+        if key in self.config['streamers']:
+            self.logger.error(f"Trying to add already existing streamer {key}")
+            return False
+        else:
+            self.config['streamers'][key] = streamer[key]
+        return True
+    
     def get_streamer_config(self, username: str) -> dict:
         """Get configuration for a specific streamer"""
         # keys are now the usernames, following line is commented out

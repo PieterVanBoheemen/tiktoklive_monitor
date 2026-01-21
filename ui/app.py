@@ -3,7 +3,9 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from fastapi import FastAPI, Request
+import copy
+
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -18,55 +20,77 @@ class TikUIApp:
         self.logger = logging.getLogger(__name__)
         self.lock = asyncio.Lock()
         self.monitor = monitor
-        self.str_state = {
-            'streamers': {},
-            "settings": {}
-        }
-        
+
         self.app = FastAPI()
 
     async def initialize(self):
-
-        await self.update_status()
         await self.setup_routes()
 
-    def _get_streamers(self):
-        return self.monitor.config_manager.get_streamers().items()
     
     # ---------- Load / Save ----------
-    async def load_streamers(self) -> None:
-        # breakpoint()
-        # async with self.lock:
-        for k,v in self._get_streamers():
-            self.str_state['streamers'][k] = v
+    def _get_conf_path(self):
+        return self.monitor.config_manager.config_file
+    
+    def _get_streamers(self):
+        """
+        Returns a deepcopy to be sure we do not interfere with logic
+        """
+        return copy.deepcopy(self.monitor.config_manager.get_streamers())
+    
+    def _get_settings(self):
+        """
+        Returns a deepcopy to be sure we do not interfere with logic
+        """
+        return copy.deepcopy(self.monitor.config_manager.get_settings())
 
+    def _get_recording(self):
+        """
+        Returns a deepcopy to be sure we do not interfere with logic
+        """
+        return copy.deepcopy(self.monitor.active_recordings)
+    
+    def _get_live_streamers(self):
+        """
+        Returns a deepcopy to be sure we do not interfere with logic
+        """
+        return copy.deepcopy(self.monitor.live_streamers)
 
-    async def save_config(self) -> None:
+    def save_config(self) -> bool:
+        """
+        Save configuration to a different file than the original config file
+        to avoid overwriting it (this is also why we do not use the save function from ConfigManager)
+        """
         suffix = ".web"
-        path = Path(self.config_manager.config_file)
+        path = Path(self._get_conf_path())
         web_file_path = f"{path.stem}{suffix}{path.suffix}"
-        with Path(web_file_path).open("w") as f:
-            json.dump(self.str_state, f, indent=2)
+        streamers = self._get_streamers()
+        settings = self._get_settings()
+        obj = {"streamers": streamers, "settings": settings}
+        
+        with open(web_file_path, 'w', encoding='utf-8') as f:
+            json.dump(obj, f, indent=2, ensure_ascii=False)
+        
+        return True
 
-    async def update_status(self):
-        await self.load_streamers()
-        recorded = self.monitor.active_recordings
-        live = self.monitor.live_streamers
+    def update_status(self) -> dict[str,dict]:
+        streamers = self._get_streamers()
         # breakpoint()
-        for k in self.str_state['streamers']:
+        recorded = self._get_recording()
+        live = self._get_live_streamers()
+        # breakpoint()
+        for k in streamers:
             if k in live:
-                self.str_state['streamers'][k]['is_live'] = True
+                streamers[k]['is_live'] = True
             else:
-                self.str_state['streamers'][k]['is_live'] = False
+                streamers[k]['is_live'] = False
             if k in recorded:
-                self.str_state['streamers'][k]['is_recording'] = True
-                self.str_state['streamers'][k]['is_live'] = True
+                streamers[k]['is_recording'] = True
+                streamers[k]['is_live'] = True
             else:
-                self.str_state['streamers'][k]['is_recording'] = False
-            if self.str_state['streamers'][k]['is_live'] or self.str_state['streamers'][k]['is_recording']:
-                self.logger.info(f"User {k} is live: {self.str_state['streamers'][k]['is_live']}, is recording: {self.str_state['streamers'][k]['is_recording']}")
-                
-
+                streamers[k]['is_recording'] = False
+            if streamers[k]['is_live'] or streamers[k]['is_recording']:
+                self.logger.debug(f"User {k} is live: {streamers[k]['is_live']}, is recording: {streamers[k]['is_recording']}")
+        return streamers 
 
     async def setup_routes(self):
         # ---------- Static HTML ----------
@@ -80,11 +104,11 @@ class TikUIApp:
         @self.app.get("/api/streamers")
         async def get_streamers():
             async with self.lock:
-                await self.update_status()
-                return self.str_state['streamers']
+                streamers = self.update_status()
+                return streamers
                 # grouped = {g: [] for g in PRIORITY_GROUPS}
                 # # breakpoint()
-                # for name, s in self.str_state['streamers'].items():
+                # for name, s in streamers.items():
                 #     # breakpoint()
                 #     grouped[s['priority_group']].append((name, s))
 
@@ -106,26 +130,74 @@ class TikUIApp:
             return {"ok": True}
 
 
-        @self.app.post("/api/toggle_enable/{name}")
-        async def toggle_enable(name: str):
-            async with self.lock:
-                s = self.str_state['streamers'][name]
-                s['enabled'] = not s['enabled']
-            return {'enabled': s['enabled']}
+        @self.app.post("/api/toggle_enable")
+        async def toggle_enable(request: Request):
+            data = await request.json()
+            name = data["name"]
+            enable = data["enable"]
+            if enable:
+                if self.monitor.config_manager.enable_streamer(name):
+                    return {"ok": True}
+            else:
+                if self.monitor.config_manager.disable_streamer(name):
+                    return {"ok": True}
 
+            return {"ok": False, "error": f"Failed {'enabling' if enable else 'disabling'} streamer {name} "}
+
+
+        @self.app.post("/api/add_streamer")
+        async def add_streamer(request: Request):
+            payload = await request.json()
+            
+            raw_username = payload.get("username", "")
+            priority_group = payload.get("priority_group", "low")
+            tags_raw = payload.get("tags", "")
+            notes = payload.get("notes", "")
+            enabled = bool(payload.get("enabled", True))
+
+            # normalize username
+            username = raw_username.strip().replace(" ", "")
+            if not username.startswith("@"):
+                username = "@" + username
+
+            async with self.lock:
+                streamers = self.update_status()
+                # determine priority = append to bottom of group
+                same_group = [
+                    s for s in streamers.values()
+                    if s.get("priority_group") == priority_group
+                ]
+                priority = len(same_group)
+                # breakpoint()
+                streamer = {f"{username}": {
+                    "enabled": enabled,
+                    "session_id": None,
+                    "tt_target_idc": None,
+                    "priority_group": priority_group,
+                    "priority": priority,
+                    "tags": [t.strip() for t in tags_raw if t.strip()],
+                    "notes": notes
+                    }
+                }
+                if self.monitor.config_manager.add_streamer(streamer):
+                    return {"ok": True}
+                else:
+                    return {"ok": False, "error": "Username already exists"}
 
         @self.app.post("/api/save")
         async def save():
             async with self.lock:
-                self.save_config()
-            return {"saved": True }
+                if self.save_config():
+                    return {"ok": True}
+                else:
+                    return {"ok": False, "error": "Error saving conf file"}
 
     async def run(self):
         self.app.run(debug=True)
 
 
 async def start_server(config_manager):
-
+    # breakpoint()
     myapp = TikUIApp(config_manager)
     await myapp.initialize()
     app = myapp.app

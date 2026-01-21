@@ -42,7 +42,7 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
         logging.getLogger("httpcore").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
         logging.getLogger("requests").setLevel(logging.WARNING)
-        logging.getLogger("uvicorn").setLevel(logging.INFO)
+        logging.getLogger("uvicorn").setLevel(logging.WARNING)
     else:
         # In verbose mode, show more logs but still filter the noisiest ones
         # logging.getLogger("TikTokLive").setLevel(logging.INFO)

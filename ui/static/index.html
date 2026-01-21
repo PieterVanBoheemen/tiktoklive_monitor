@@ -36,7 +36,7 @@
   <div class="modal-content">
     <h3>Add Streamer</h3>
 
-    <input id="new-username" placeholder="@username" />
+    <input id="new-username" placeholder="@username" oninput="this.value = this.value.replace(/\s+/g, '')" />
     <select id="new-priority-group">
       <option value="high">High</option>
       <option value="medium">Medium</option>

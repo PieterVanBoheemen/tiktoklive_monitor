@@ -102,7 +102,6 @@ class StreamMonitor:
                 if config_changed:
                     # Update components with new config
                     self.stability_tracker.update_config(self.config_manager)
-                    enabled_streamers = self.config_manager.get_enabled_streamers()
 
                 # Check for control signals
                 control_signal = self.shutdown_handler.check_control_signals()
@@ -126,6 +125,9 @@ class StreamMonitor:
 
                 check_count += 1
                 start_time = asyncio.get_event_loop().time()
+                
+                # we always check the streamers (and not just when the conf file has changed) in case anything has been added
+                enabled_streamers = self.config_manager.get_enabled_streamers()
 
                 if len(self.recorder.get_active_recordings()) >= self.config_manager.config['settings']['max_concurrent_recordings']:
                     self.logger.info("⏸️  Max concurrent recordings reached, skipping this check cycle")
