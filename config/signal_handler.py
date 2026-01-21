@@ -123,7 +123,7 @@ class GracefulShutdownHandler:
 
             # Stop all recordings in parallel with timeout
             shutdown_tasks = []
-            for username in list(self.monitor.active_recordings.keys()):
+            for username in list(self.monitor.active_recordings):
                 if hasattr(self.monitor, 'recorder'):
                     task = asyncio.create_task(
                         self.monitor.recorder.stop_recording(username, "graceful_shutdown")
@@ -142,7 +142,7 @@ class GracefulShutdownHandler:
                 except asyncio.TimeoutError:
                     self.logger.warning("⚠️  Some recordings took longer than expected to stop")
                     # Force cleanup any remaining recordings
-                    for username in list(self.monitor.active_recordings.keys()):
+                    for username in list(self.monitor.active_recordings):
                         try:
                             if hasattr(self.monitor, 'recorder'):
                                 await asyncio.wait_for(

@@ -136,9 +136,12 @@ async def main():
         # Create and run the stream monitor
         monitor = StreamMonitor(config_manager)
 
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(start_server(monitor))
-            tg.create_task(monitor.run())
+        mon_task = asyncio.create_task(monitor.run())
+        ui_task = asyncio.create_task(start_server(monitor))
+
+        await mon_task  # Wait for monitoring to complete
+        ui_task.cancel()  # Cancel server running the ui when monitoring is done
+    
                 
     except FileNotFoundError as e:
         logger.error(f"❌ Configuration file not found: {e}")

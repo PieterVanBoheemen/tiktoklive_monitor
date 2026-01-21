@@ -43,11 +43,12 @@ class TikUIApp:
         """
         return copy.deepcopy(self.monitor.config_manager.get_settings())
 
-    def _get_recording(self):
+    def _get_recording(self) -> list[str]:
         """
-        Returns a deepcopy to be sure we do not interfere with logic
+        Returns a list of usernames currently being recorded
         """
-        return copy.deepcopy(self.monitor.active_recordings)
+        # breakpoint()
+        return self.monitor.active_recordings
     
     def _get_live_streamers(self):
         """
@@ -204,7 +205,11 @@ async def start_server(config_manager):
     
     srv_config = uvicorn.Config(app, loop="asyncio", log_config=None, reload=True, reload_dirs="./")
     server = uvicorn.Server(srv_config)
-    await server.serve()
+    try:
+        await server.serve()
+    except asyncio.exceptions.CancelledError as e:
+        logger = logging.getLogger(__name__)
+        logger.info(f"Caught task cancelation, assuming request to terminate")
 
 def parse_args():
     """Parse command line arguments"""

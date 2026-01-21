@@ -303,9 +303,9 @@ class StreamMonitor:
 
     # Properties for backward compatibility and easy access
     @property
-    def active_recordings(self) -> Dict[str, any]:
-        """Get active recordings"""
-        return self.recorder.active_recordings
+    def active_recordings(self) -> list[str]:
+        """Get usernames of active recordings"""
+        return list(self.recorder.active_recordings.keys())
 
     @property
     def pending_disconnects(self) -> Dict[str, any]:
