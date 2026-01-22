@@ -247,6 +247,15 @@ class ConfigManager:
             self.config['streamers'][streamer]['enabled'] = False
         return True
     
+    def set_streamer_priority(self, streamer:str, priority_group:str, priority:int) -> bool:
+        if not streamer in self.config['streamers']:
+            self.logger.error(f"Trying to set priority for a non-existing streamer {streamer}")
+            return False
+        else:
+            self.config['streamers'][streamer]['priority_group'] = priority_group
+            self.config['streamers'][streamer]['priority'] = priority
+        return True
+
     def add_streamer(self, streamer:dict[str,any]) -> bool:
         """Get all streamers from configuration"""
         # get the only key in the dict, the username

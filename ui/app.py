@@ -124,12 +124,17 @@ class TikUIApp:
             order = await request.json()
 
             async with self.lock:
+                errors = []
                 for idx, name in enumerate(order):
-                    s = self.str_state['streamers'][name]
-                    s['priority_group'] = group
-                    s['priority'] = idx
+                    # breakpoint()
+                    if not self.monitor.config_manager.set_streamer_priority(name, group, idx):
+                        errors.append(name)
+                # breakpoint()
 
-            return {"ok": True}
+            if len(errors) == 0:
+                return {"ok": True}
+            else:
+                return {"ok": False, "error": f"Error setting priority for the following streamers: {errors}"}
 
 
         @self.app.post("/api/toggle_enable")

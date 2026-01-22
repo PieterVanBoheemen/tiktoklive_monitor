@@ -78,17 +78,12 @@ async function show_streamers() {
     const ul = document.getElementById(g);
     ul.innerHTML = "";
 
-    Object.entries(data).forEach(([key, value]) => {
-      if (value.priority_group != g) {
-        return;
-      }
-      
-      if (!value.enabled && btn_hideDisabled){
-        return;
-      }
-      if (!value.is_live && btn_hideOffline){
-        return;
-      }
+    Object.entries(data)
+    .filter(([_, value]) => value.priority_group === g)
+    .filter(([_, value]) => !(btn_hideDisabled && !value.enabled))
+    .filter(([_, value]) => !(btn_hideOffline && !value.is_live))
+    .sort(([, a], [, b]) => a.priority - b.priority)   // 🔑 THIS IS REQUIRED
+    .forEach(([key, value]) => {
       const li = document.createElement("li");
       
       let classes = ["item"];
@@ -110,23 +105,23 @@ async function show_streamers() {
       ul.appendChild(li);
     });
   });
-//   ["high", "medium", "low"].forEach(g => {
-//   new Sortable(document.getElementById(g), {
-//     group: "priority",
-//     animation: 150,
-//     onEnd: () => reorder(g, document.getElementById(g))
-//   });
-// });
 
 }
 
 async function reorder(group, ul) {
   const order = [...ul.children].map(li => li.dataset.name);
-  await fetch(`/api/reorder/${group}`, {
+  const resp = await fetch(`/api/reorder/${group}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(order)
   });
+  const resp_json = await resp.json();
+  if (!resp_json.ok) {
+    showMessage(resp_json.error);
+  }
+  await show_streamers();
+  return;
+
 }
 
 //
@@ -272,8 +267,23 @@ async function refreshLoop() {
 //
 // Run at start
 //
-/* Listener to not refresh when user is active */
-document.addEventListener("mousedown", () => userActive = true);
-document.addEventListener("mouseup", () => userActive = false);
+document.addEventListener("DOMContentLoaded", () => {
 
-refreshLoop();
+  ["high", "medium", "low"].forEach(g => {
+    const ul = document.getElementById(g);
+    new Sortable(ul, {
+      group: "priority",
+      animation: 150,
+      draggable: "li.item",
+      onAdd: () => reorder(g, ul),
+      onUpdate: () => reorder(g, ul),
+      onRemove: () => reorder(g, ul)
+    });
+  });
+  /* Listener to not refresh when user is active */
+  document.addEventListener("mousedown", () => userActive = true);
+  document.addEventListener("mouseup", () => userActive = false);
+
+  refreshLoop();
+
+});
