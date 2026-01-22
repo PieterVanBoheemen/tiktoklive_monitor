@@ -140,7 +140,11 @@ async def main():
         ui_task = asyncio.create_task(start_server(monitor))
 
         await mon_task  # Wait for monitoring to complete
-        ui_task.cancel()  # Cancel server running the ui when monitoring is done
+        # ui_task.cancel()  # Cancel server running the ui when monitoring is done
+        
+        # Graceful shutdown
+        monitor.uvicorn_server.should_exit = True
+        await ui_task
     
                 
     except FileNotFoundError as e:
@@ -150,6 +154,9 @@ async def main():
         # Due to the signal handling, this may not be reached
         logger.info("\n👋 Monitor stopped by user")
         sys.exit(0)
+    except asyncio.exceptions.CancelledError as e:
+        logger.warning(f"Caught task cancelation, this should not happen")
+        sys.exit(1)
     except Exception as e:
         logger.error(f"❌ Fatal error: {e}")
         if platform.system() == "Windows":

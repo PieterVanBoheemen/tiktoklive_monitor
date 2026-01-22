@@ -1,6 +1,47 @@
+// Constants
+const refresh_rate_sec = 10;
+
+// UI Status variables
 var btn_hideDisabled = false;
 var btn_hideOffline = false;
 
+var userActive = false;
+var stopCalled = false
+
+//
+// Data loading
+//
+/* Get streamer data enriched with status info */
+async function load_streamers() {
+  const res = await fetch("/api/streamers");
+  const data = await res.json();
+  return data;  
+}
+
+//
+// Layout
+//
+
+/* Handle pop-up to add streamers */
+function openAddModal() {
+  document.getElementById("addModal").classList.remove("hidden");
+}
+
+function closeAddModal() {
+  document.getElementById("addModal").classList.add("hidden");
+}
+
+/* Handle pop-up to communicate messages */
+function showMessage(msg) {
+  document.getElementById("msgText").innerText = msg;
+  document.getElementById("msgModal").classList.remove("hidden");
+}
+
+function closeMsgModal() {
+  document.getElementById("msgModal").classList.add("hidden");
+}
+
+/** Creates the tile for each streamer */
 function make_item(username, priority, tags, notes, enabled) {
     return `
     <span class="username">${username}</span><br>
@@ -13,8 +54,8 @@ function make_item(username, priority, tags, notes, enabled) {
   `;
 }
 
+/* Minimal normalization for usernames */
 function normalizeUsername(raw) {
-  
   username = raw
     .trim()
     .replace(/\s+/g, "")
@@ -30,11 +71,6 @@ function normalizeUsername(raw) {
   return username;
 }
 
-async function load_streamers() {
-  const res = await fetch("/api/streamers");
-  const data = await res.json();
-  return data;  
-}
 async function show_streamers() {
   const data = await load_streamers();
 
@@ -93,6 +129,10 @@ async function reorder(group, ul) {
   });
 }
 
+//
+// Button handling
+//
+/* Enable/disable streamers */
 async function toggleEnable(name, toDisable) {
   enable = toDisable=="true" ? false : true;
   const resp = await fetch("/api/toggle_enable", {
@@ -112,7 +152,7 @@ async function toggleEnable(name, toDisable) {
   }
   return;
 }
-
+/* Hide/show disabled streamers */
 async function toggleViewDisabled() {
   btn_hideDisabled = !btn_hideDisabled;
   const btn = document.getElementById("hidDis");
@@ -123,7 +163,7 @@ async function toggleViewDisabled() {
   }
   show_streamers();
 }
-
+/* Hide/show streamers that are not live*/
 async function toggleViewOffline() {
   btn_hideOffline = !btn_hideOffline;
   const btn = document.getElementById("hidOff");
@@ -134,8 +174,8 @@ async function toggleViewOffline() {
   }
   show_streamers();
 }
-
-async function save() {
+/* Save conf with possibly added streamer */
+async function saveConfig() {
   const resp = await fetch("/api/save", { method: "POST" });
   const resp_json = await resp.json();
   if (!resp_json.ok) {
@@ -147,25 +187,20 @@ async function save() {
   return;
 }
 
-
-
-function openAddModal() {
-  document.getElementById("addModal").classList.remove("hidden");
+/* Stop monitoring initiating graceful shutdown */
+async function stopMonitor() {
+  const resp = await fetch("/api/stop", { method: "POST" });
+  const resp_json = await resp.json();
+  if (!resp_json.ok) {
+    showMessage(resp_json.error);
+  }else{
+    showMessage("Graceful shutdown initiated, UI will not refresh");
+    stopCalled = true;
+  }
+  return;
 }
 
-function closeAddModal() {
-  document.getElementById("addModal").classList.add("hidden");
-}
-
-function showMessage(msg) {
-  document.getElementById("msgText").innerText = msg;
-  document.getElementById("msgModal").classList.remove("hidden");
-}
-
-function closeMsgModal() {
-  document.getElementById("msgModal").classList.add("hidden");
-}
-
+/* Handle adding streamers */
 async function confirmAddStreamer() {
   let username = normalizeUsername(document.getElementById("new-username").value);
   if (!username) {
@@ -219,3 +254,26 @@ async function confirmAddStreamer() {
   document.getElementById("new-tags").value = "";
   document.getElementById("new-notes").value = "";
 }
+
+//
+// Refresh UI
+//
+
+/** Refresh the streamers periodically */
+async function refreshLoop() {
+  while (true) {
+    if (!userActive && !stopCalled) {
+      await show_streamers();
+    }
+    await new Promise(r => setTimeout(r, refresh_rate_sec*1000));
+  }
+}
+
+//
+// Run at start
+//
+/* Listener to not refresh when user is active */
+document.addEventListener("mousedown", () => userActive = true);
+document.addEventListener("mouseup", () => userActive = false);
+
+refreshLoop();

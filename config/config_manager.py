@@ -31,20 +31,20 @@ class ConfigManager:
             self.logger.info("ℹ️  No session ID provided - only public streams accessible")
 
         # Apply command line argument overrides to configuration
-        if args.data_center:
-            self.data_center = args.data_center
-            self.config['settings']['tt_target_idc'] = args.data_center
-            self.logger.info(f"🌍 Data center overridden to: {args.data_center}")
+        self.data_center = args.data_center
+        if self.data_center:
+            self.config['settings']['tt_target_idc'] = self.data_center
+            self.logger.info(f"🌍 Data center overridden to: {self.data_center}")
 
-        if args.check_interval:
-            self.check_interval = args.check_interval
-            self.config['settings']['check_interval_seconds'] = args.check_interval
-            self.logger.info(f"⏱️  Check interval overridden to: {args.check_interval}s")
+        self.check_interval = args.check_interval
+        if self.check_interval:
+            self.config['settings']['check_interval_seconds'] = self.check_interval
+            self.logger.info(f"⏱️  Check interval overridden to: {self.check_interval}s")
 
-        if args.output_dir:
-            self.output_dir = args.output_dir
-            self.config['settings']['output_directory'] = args.output_dir
-            self.logger.info(f"📁 Output directory overridden to: {args.output_dir}")
+        self.output_dir = args.output_dir
+        if self.output_dir:
+            self.config['settings']['output_directory'] = self.output_dir
+            self.logger.info(f"📁 Output directory overridden to: {self.output_dir}")
 
 
         # Setup environment variables for authenticated sessions

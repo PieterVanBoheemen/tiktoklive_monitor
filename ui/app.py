@@ -4,6 +4,7 @@ import json
 import logging
 from pathlib import Path
 import copy
+import sys
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
@@ -192,25 +193,29 @@ class TikUIApp:
                     return {"ok": True}
                 else:
                     return {"ok": False, "error": "Error saving conf file"}
+        @self.app.post("/api/stop")
+        async def stop():
+            async with self.lock:
+                self.monitor.monitoring = False                
+                return {"ok": True}
 
     async def run(self):
         self.app.run(debug=True)
 
 
-async def start_server(config_manager):
+async def start_server(monitor):
     # breakpoint()
-    myapp = TikUIApp(config_manager)
+    myapp = TikUIApp(monitor)
     await myapp.initialize()
     app = myapp.app
     
-    srv_config = uvicorn.Config(app, loop="asyncio", log_config=None, reload=True, reload_dirs="./")
+    srv_config = uvicorn.Config(app, loop="asyncio", log_config=None, reload=False)
     server = uvicorn.Server(srv_config)
-    try:
-        await server.serve()
-    except asyncio.exceptions.CancelledError as e:
-        logger = logging.getLogger(__name__)
-        logger.info(f"Caught task cancelation, assuming request to terminate")
 
+    # expose server so caller can stop it
+    monitor.uvicorn_server = server
+    await server.serve()
+    
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
@@ -237,5 +242,7 @@ def parse_args():
 
 if __name__ == "__main__":
 # breakpoint()
-    args = parse_args()
-    asyncio.run(start_server(args.config))
+    print("Running UI stand alone not supported due to dependency with Stream Monitor")
+    sys.exit(1)
+    # args = parse_args()
+    # asyncio.run(start_server(args.config))
