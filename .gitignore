@@ -189,3 +189,4 @@ debug_*
 *.db
 *.sqlite
 *.sqlite3
+.api_key
