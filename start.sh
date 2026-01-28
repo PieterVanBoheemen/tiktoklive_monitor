@@ -19,7 +19,7 @@ then
     fi
 elif [ "$(uname)" == "Linux" ]
 then
-    if [ ! -d ""./${virt_env}" "]
+    if [ ! -d "./${virt_env} "]
     then
         python3 -m venv ${virt_env}
         source ${virt_env}/bin/activate
