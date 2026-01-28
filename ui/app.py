@@ -214,7 +214,7 @@ async def start_server(monitor):
     await myapp.initialize()
     app = myapp.app
     
-    srv_config = uvicorn.Config(app, loop="asyncio", log_config=None, reload=False)
+    srv_config = uvicorn.Config(app, loop="asyncio", host='0.0.0.0', port=8000, log_config=None, reload=False)
     server = uvicorn.Server(srv_config)
 
     # expose server so caller can stop it
