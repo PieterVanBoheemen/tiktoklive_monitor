@@ -1,6 +1,7 @@
 #!/bin/bash
 virt_env=tiktok
 env_type=${1}
+conf_file=${2}
 python_version=3.12.3
 
 if [ "$(uname)" == "Darwin" ]
@@ -50,7 +51,7 @@ then
     exec_command="${exec_command} --test"
 fi
 
-exec_command="${exec_command} --config streamers_config.json"
+exec_command="${exec_command} --config ${conf_file}"
 
 echo "Executing ${exec_command}"
 
