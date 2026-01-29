@@ -98,7 +98,7 @@ class StatusManager:
                 return True
             return True
         except Exception as e:
-            self.logger.warning(f"Could not clean up status file: {e}")
+            self.logger.warning(f"⚠️  Could not clean up status file: {e}")
             return False
 
     def get_status_summary(self) -> str:

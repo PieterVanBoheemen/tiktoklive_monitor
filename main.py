@@ -15,8 +15,7 @@ from pathlib import Path
 from config.config_manager import ConfigManager
 from monitor.stream_monitor import StreamMonitor
 from utils.logging_setup import setup_logging
-from utils.system_utils import setup_platform_specific
-
+from utils.system_utils import setup_platform_specific, activate_debug_breakpoint, debug_breakpoint
 
 def parse_args():
     """Parse command line arguments"""
@@ -68,6 +67,13 @@ Windows Examples:
     )
 
     parser.add_argument(
+        '--test', '-t',
+        action='store_true',
+        help='Test mode (activates breakpoints in code for debugging purposes)'
+    )
+
+
+    parser.add_argument(
         '--verbose', '-v',
         action='store_true',
         help='Enable verbose logging'
@@ -107,6 +113,9 @@ def print_startup_info(args):
 
 def apply_command_line_overrides(config_manager, args):
     """Apply command line argument overrides to configuration"""
+    # TODO: decide what command line arguments should be reinstated when check_config_changes is run,
+    # at the moment just the session id but not the parameters in this function, and in case
+    # refactor ConfigManager to accept args directly, keep them and reinstate them on reload
     logger = logging.getLogger(__name__)
 
     if args.data_center:
@@ -126,6 +135,13 @@ async def main():
     """Main entry point"""
     args = parse_args()
 
+    # Setup logging
+    logger = setup_logging(verbose=args.verbose)
+
+    if args.test:
+        logger.info("🐞 Test mode activated - breakpoints will be triggered")
+        activate_debug_breakpoint()
+
     # Setup platform-specific configurations
     setup_platform_specific()
 
@@ -139,9 +155,6 @@ async def main():
             session_id_override=args.session_id
         )
 
-        # Setup logging
-        logger = setup_logging(verbose=args.verbose)
-
         # Apply command line overrides
         apply_command_line_overrides(config_manager, args)
 
@@ -150,18 +163,19 @@ async def main():
         await monitor.run()
 
     except FileNotFoundError as e:
-        print(f"❌ Configuration file not found: {e}")
+        logger.error(f"❌ Configuration file not found: {e}")
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\n👋 Monitor stopped by user")
+        # Due to the signal handling, this may not be reached
+        logger.info("\n👋 Monitor stopped by user")
         sys.exit(0)
     except Exception as e:
-        print(f"❌ Fatal error: {e}")
+        logger.error(f"❌ Fatal error: {e}")
         if platform.system() == "Windows":
-            print("💡 Windows troubleshooting:")
-            print("   • Check Windows Defender/Antivirus isn't blocking the script")
-            print("   • Ensure you have proper internet connectivity")
-            print("   • Try running the script from Command Prompt as administrator")
+            logger.error("💡 Windows troubleshooting:")
+            logger.error("   • Check Windows Defender/Antivirus isn't blocking the script")
+            logger.error("   • Ensure you have proper internet connectivity")
+            logger.error("   • Try running the script from Command Prompt as administrator")
         sys.exit(1)
 
 
@@ -175,7 +189,7 @@ if __name__ == "__main__":
                 # Fallback for older Python versions
                 pass
 
-        asyncio.run(main())
+        asyncio.run(main(), debug=True)
     except KeyboardInterrupt:
         print("\n👋 Monitor stopped by user")
         sys.exit(0)

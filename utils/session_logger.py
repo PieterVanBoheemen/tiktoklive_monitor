@@ -13,7 +13,7 @@ from typing import Dict, Optional, Any, List
 class SessionLogger:
     """Handles session event logging to CSV"""
 
-    def __init__(self, log_directory: str = "."):
+    def __init__(self, log_directory: str = "./logs"):
         self.logger = logging.getLogger(__name__)
         self.log_directory = Path(log_directory)
         self.log_directory.mkdir(parents=True, exist_ok=True)
@@ -35,7 +35,7 @@ class SessionLogger:
                     ])
                 self.logger.debug(f"Initialized session log: {self.session_log_file}")
             except Exception as e:
-                self.logger.error(f"Failed to initialize session log: {e}")
+                self.logger.error(f"❌ Failed to initialize session log: {e}")
 
     def log_session_event(self, username: str, action: str, status: str = 'success',
                          duration_minutes: float = 0, stats: Optional[Dict[str, int]] = None,
@@ -64,7 +64,7 @@ class SessionLogger:
                     error_message
                 ])
         except Exception as e:
-            self.logger.error(f"Failed to log session event: {e}")
+            self.logger.error(f"❌ Failed to log session event: {e}")
 
     def log_recording_started(self, username: str, streamer_config: Optional[Dict] = None):
         """Log when a recording starts"""
@@ -221,7 +221,7 @@ class SessionLogger:
             return stats
 
         except Exception as e:
-            self.logger.error(f"Error reading session statistics: {e}")
+            self.logger.error(f"❌ Error reading session statistics: {e}")
             return {'error': str(e)}
 
     def get_streamer_history(self, username: str, days: int = 7) -> List[Dict[str, Any]]:
@@ -312,7 +312,7 @@ class SessionLogger:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error exporting session data: {e}")
+            self.logger.error(f"❌ Error exporting session data: {e}")
             return False
 
     def cleanup_old_logs(self, days_to_keep: int = 30) -> int:
@@ -337,7 +337,7 @@ class SessionLogger:
                     continue
 
         except Exception as e:
-            self.logger.error(f"Error during log cleanup: {e}")
+            self.logger.error(f"❌ Error during log cleanup: {e}")
 
         if cleaned_count > 0:
             self.logger.info(f"Cleaned up {cleaned_count} old log files")

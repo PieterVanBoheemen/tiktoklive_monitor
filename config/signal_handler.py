@@ -7,6 +7,7 @@ import asyncio
 import logging
 import os
 import platform
+import random
 import signal
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -45,12 +46,12 @@ class GracefulShutdownHandler:
                 signal.signal(signal.SIGTERM, self.signal_handler)
                 signal.signal(signal.SIGHUP, self.signal_handler)
         except Exception as e:
-            self.logger.warning(f"Could not set up all signal handlers: {e}")
+            self.logger.warning(f"⚠️  Could not set up all signal handlers: {e}")
 
     def signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully"""
         if self.shutdown_initiated:
-            self.logger.warning("🚨 Multiple shutdown signals received - forcing immediate exit")
+            self.logger.info("🚨 Multiple shutdown signals received - forcing immediate exit")
             os._exit(1)
 
         self.shutdown_initiated = True
@@ -63,7 +64,7 @@ class GracefulShutdownHandler:
                 f.write(f"signal_{signal_name}")
             self.logger.info("📄 Created stop file for graceful shutdown")
         except Exception as e:
-            self.logger.error(f"Could not create stop file: {e}")
+            self.logger.error(f"❌ Could not create stop file: {e}")
 
         # Don't immediately stop monitoring - let the monitoring loop handle it gracefully
         self.monitor.monitoring = False
@@ -76,7 +77,7 @@ class GracefulShutdownHandler:
                     file_path.unlink()
                     self.logger.debug(f"Removed existing control file: {file_path}")
                 except Exception as e:
-                    self.logger.warning(f"Could not remove {file_path}: {e}")
+                    self.logger.warning(f"⚠️  Could not remove {file_path}: {e}")
 
     def check_control_signals(self) -> str:
         """Check for file-based control signals"""
@@ -139,7 +140,7 @@ class GracefulShutdownHandler:
                     )
                     self.logger.info("✅ All recordings stopped gracefully")
                 except asyncio.TimeoutError:
-                    self.logger.warning("⚠️ Some recordings took longer than expected to stop")
+                    self.logger.warning("⚠️  Some recordings took longer than expected to stop")
                     # Force cleanup any remaining recordings
                     for username in list(self.monitor.active_recordings.keys()):
                         try:
@@ -149,9 +150,9 @@ class GracefulShutdownHandler:
                                     timeout=5.0
                                 )
                         except Exception as e:
-                            self.logger.error(f"Error force-stopping {username}: {e}")
+                            self.logger.error(f"❌ Error force-stopping {username}: {e}")
                 except Exception as e:
-                    self.logger.error(f"Error during graceful shutdown: {e}")
+                    self.logger.error(f"❌ Error during graceful shutdown: {e}")
 
         # Clean up control files
         self.cleanup_control_files()
@@ -176,7 +177,7 @@ class GracefulShutdownHandler:
                         child.wait(timeout=5)
                         self.logger.debug(f"FFmpeg process {child.pid} terminated gracefully")
                     except psutil.TimeoutExpired:
-                        self.logger.warning(f"⚠️ Force killing FFmpeg process: {child.pid}")
+                        self.logger.warning(f"⚠️  Force killing FFmpeg process: {child.pid}")
                         try:
                             child.kill()
                         except:
@@ -191,7 +192,7 @@ class GracefulShutdownHandler:
 
     async def handle_pause_signal(self, duration: int):
         """Handle pause signal"""
-        self.logger.info(f"⏸️  Pausing monitoring for {duration} seconds...")
+        self.logger.info(f"⏸️  Pausing monitoring for about {duration} seconds...")
 
         # Update status if monitor has status update capability
         if hasattr(self.monitor, 'update_status_file'):
@@ -202,9 +203,9 @@ class GracefulShutdownHandler:
             try:
                 self.pause_file.unlink()
             except Exception as e:
-                self.logger.warning(f"Could not remove pause file: {e}")
+                self.logger.warning(f"⚠️  Could not remove pause file: {e}")
 
-        await asyncio.sleep(duration)
+        await asyncio.sleep(random.uniform(duration*(1-1/5), duration*(1+1/5)))
         self.logger.info("▶️  Resuming monitoring...")
 
         # Update status

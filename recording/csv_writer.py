@@ -45,7 +45,7 @@ class CSVWriter:
     def initialize_csv_writers(self, username: str, csv_files: Dict[str, Path]) -> bool:
         """Initialize CSV writers with headers and keep file handles open"""
         if username in self.active_writers:
-            self.logger.warning(f"CSV writers already exist for {username}")
+            self.logger.warning(f"⚠️  CSV writers already exist for {username}")
             return False
 
         csv_writers = {}
@@ -73,7 +73,7 @@ class CSVWriter:
 
         except Exception as e:
             # Clean up any files we managed to open
-            self.logger.error(f"Error opening CSV files for {username}, cleaning up: {e}")
+            self.logger.error(f"❌ Error opening CSV files for {username}, cleaning up: {e}")
             for file_handle in opened_files:
                 try:
                     file_handle.close()
@@ -99,8 +99,8 @@ class CSVWriter:
             getattr(event.user, 'nickname', ''),
             event.gift.name,
             event.repeat_count,
-            event.gift.streakable,
-            event.streaking
+            getattr(event.gift, 'streakable', False),
+            getattr(event, 'streaking', False)
         ])
 
     def write_follow(self, username: str, event) -> bool:
@@ -156,11 +156,11 @@ class CSVWriter:
     def _write_event(self, username: str, event_type: str, row_data: list) -> bool:
         """Write an event to the appropriate CSV file"""
         if username not in self.active_writers:
-            self.logger.warning(f"No active CSV writers for {username}")
+            self.logger.warning(f"⚠️  No active CSV writers for {username}")
             return False
 
         if event_type not in self.active_writers[username]:
-            self.logger.warning(f"No {event_type} CSV writer for {username}")
+            self.logger.warning(f"⚠️  No {event_type} CSV writer for {username}")
             return False
 
         try:
@@ -170,7 +170,7 @@ class CSVWriter:
 
             # Check if file is still open
             if file_handle.closed:
-                self.logger.warning(f"CSV file for {username} {event_type} is closed")
+                self.logger.warning(f"⚠️  CSV file for {username} {event_type} is closed")
                 return False
 
             writer.writerow(row_data)
@@ -178,7 +178,7 @@ class CSVWriter:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error writing {event_type} event for {username}: {e}")
+            self.logger.error(f"❌ Error writing {event_type} event for {username}: {e}")
             return False
 
     def close_csv_writers(self, username: str) -> bool:
@@ -200,7 +200,7 @@ class CSVWriter:
                 else:
                     self.logger.debug(f"{csv_type} CSV file already closed for {username}")
             except Exception as e:
-                self.logger.error(f"Error closing {csv_type} CSV file for {username}: {e}")
+                self.logger.error(f"❌ Error closing {csv_type} CSV file for {username}: {e}")
                 success = False
 
         # Remove from active writers

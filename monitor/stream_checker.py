@@ -6,20 +6,29 @@ Handles checking if streamers are live with retries and parallel processing
 import asyncio
 import logging
 import os
+import random
 from typing import Dict, TYPE_CHECKING
 
+import httpx
 from TikTokLive.client.client import TikTokLiveClient
+from TikTokLive.client.web.routes.fetch_room_id_live_html import FailedParseRoomIdError
+from TikTokLive.client.errors import UserNotFoundError
 
-if TYPE_CHECKING:
-    from config.config_manager import ConfigManager
+
+from utils.system_utils import debug_breakpoint
+from utils.patches import patch_TikTokLiveClient
+
+# if TYPE_CHECKING:
+from config.config_manager import ConfigManager
 
 
 class StreamChecker:
     """Handles checking stream status for multiple streamers"""
 
-    def __init__(self, config_manager: 'ConfigManager'):
+    def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
+        self.clients = {}
 
     async def check_streamer_status(self, username: str) -> bool:
         """Check if a streamer is currently live with enhanced error handling"""
@@ -34,8 +43,13 @@ class StreamChecker:
                 )
                 os.environ['WHITELIST_AUTHENTICATED_SESSION_ID_HOST'] = whitelist_host
 
-                client = TikTokLiveClient(unique_id=username)
-
+                # Reuse existing client if available
+                if username in self.clients:
+                    client = self.clients[username]['client']
+                else:
+                    client = TikTokLiveClient(unique_id=username)
+                    patch_TikTokLiveClient(client)
+                    self.clients[username] = {'client': client, 'failed': False}
                 # Set session ID if available
                 session_id = self.config_manager.get_session_id_for_streamer(username)
                 tt_target_idc = self.config_manager.get_target_idc_for_streamer(username)
@@ -49,23 +63,72 @@ class StreamChecker:
                 if attempt > 0:  # Log successful retry
                     self.logger.debug(f"✅ Status check succeeded for {username} on attempt {attempt + 1}")
 
+                self.clients[username]['failed'] = False
                 return is_live
 
             except asyncio.TimeoutError:
                 if attempt < max_retries:
-                    self.logger.debug(f"⏱️ Timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
-                    await asyncio.sleep(0.5)  # Minimal delay for retry
+                    self.logger.warning(f"⚠️  Async timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
                     continue
                 else:
-                    self.logger.debug(f"⏱️ Final timeout checking {username} after {max_retries + 1} attempts")
+                    self.logger.error(f"❌ Final asynch timeout checking {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
+                    return False
+            except httpx.ReadTimeout:
+                if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Network timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
+                    continue
+                else:
+                    self.logger.error(f"❌ Final network timeout checking {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
+                    return False
+            except httpx.ConnectError:
+                if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Network connect error checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
+                    continue
+                else:
+                    self.logger.error(f"❌ Final network connect error checking {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
+                    return False
+            except httpx.ConnectTimeout:
+                if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Network connect timeout checking {username}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
+                    continue
+                else:
+                    self.logger.error(f"❌ Final network connect timeout checking {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
+                    return False
+            except FailedParseRoomIdError as e:
+                if attempt < max_retries:
+                    self.logger.warning(f"⚠️  Failed to parse room ID for {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
+                    continue
+                else:
+                    self.logger.error(f"❌ Final failed to parse room ID for {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
+                    return False
+            except UserNotFoundError as e:
+                if attempt < max_retries:
+                    self.logger.warning(f"⚠️  User not found for {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
+                    continue
+                else:
+                    self.logger.error(f"❌ Final user not found for {username} after {max_retries + 1} attempts")
+                    self.clients[username]['failed'] = True
                     return False
             except Exception as e:
+                debug_breakpoint()
                 if attempt < max_retries:
-                    self.logger.debug(f"⚠️ Error checking {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
-                    await asyncio.sleep(0.5)  # Minimal delay for retry
+                    self.logger.warning(f"⚠️  Unknown error checking {username}: {e}, retrying... (attempt {attempt + 1}/{max_retries + 1})")
+                    await asyncio.sleep(random.uniform(0.5,1))  # Minimal delay for retry
                     continue
                 else:
-                    self.logger.debug(f"❌ Final error checking {username}: {e}")
+                    self.logger.error(f"❌ Final unknown error checking {username}: {e}")
+                    self.clients[username]['failed'] = True
                     return False
 
         return False
@@ -75,8 +138,7 @@ class StreamChecker:
         timeout = self.config_manager.config['settings'].get('individual_check_timeout', 20)
         batch_size = self.config_manager.config['settings'].get('batch_size', 50)
 
-        async def check_single_streamer_with_timeout(streamer_key: str, streamer_config: dict):
-            username = streamer_config['username']
+        async def check_single_streamer_with_timeout(username: str):
             try:
                 # Use individual timeout per streamer
                 is_live = await asyncio.wait_for(
@@ -85,30 +147,31 @@ class StreamChecker:
                 )
                 return username, is_live
             except asyncio.TimeoutError:
-                self.logger.debug(f"Individual timeout for {username}")
+                self.logger.warning(f"Individual timeout for {username}")
                 return username, False
             except Exception as e:
-                self.logger.debug(f"Error in parallel check for {username}: {e}")
+                # Catch-all for any unexpected errors, should not happen because check_streamer_status handles its own errors
+                self.logger.warning(f"Error in parallel check for {username}: {e}")
                 return username, False
 
         # Split streamers into batches
-        streamer_items = list(enabled_streamers.items())
-        total_streamers = len(streamer_items)
+        streamers = [key for key in enabled_streamers.keys()]
+        total_streamers = len(streamers)
         live_status = {}
 
         self.logger.info(f"🔄 Processing {total_streamers} streamers in batches of {batch_size}")
 
+        total_batches = (total_streamers + batch_size - 1) // batch_size
         for i in range(0, total_streamers, batch_size):
-            batch = streamer_items[i:i + batch_size]
+            batch = streamers[i:i + batch_size]
             batch_num = (i // batch_size) + 1
-            total_batches = (total_streamers + batch_size - 1) // batch_size
             
             self.logger.info(f"📦 Processing batch {batch_num}/{total_batches} ({len(batch)} streamers)")
 
             # Create tasks for current batch
             tasks = [
-                check_single_streamer_with_timeout(streamer_key, streamer_config)
-                for streamer_key, streamer_config in batch
+                check_single_streamer_with_timeout(username)
+                for username in batch
             ]
 
             try:
@@ -120,18 +183,28 @@ class StreamChecker:
                     if isinstance(result, tuple):
                         username, is_live = result
                         live_status[username] = is_live
+                        if not is_live:
+                            self.logger.debug(f"🔴 {username} is offline")
+                            if username in self.clients:
+                                del self.clients[username]  # Remove client to avoid accumulating TikTokLiveClient instances
                     elif isinstance(result, Exception):
-                        self.logger.debug(f"Task exception: {result}")
+                        self.logger.warning(f"Task exception: {result}")
 
                 # Brief pause between batches to avoid overwhelming the API
                 if i + batch_size < total_streamers:
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(random.uniform(0.5,2))
 
             except Exception as e:
-                self.logger.warning(f"⚠️ Error in batch {batch_num}: {e}")
+                self.logger.warning(f"⚠️  Error in batch {batch_num}: {e}")
                 # Mark failed batch streamers as offline
-                for streamer_key, streamer_config in batch:
-                    live_status[streamer_config['username']] = False
+                for username in batch:
+                    live_status[username] = False
+
+        # Check if all streamers failed and in case inform monitoring
+        if len(self.clients) > 0 and not any(not self.clients[username]['failed'] for username in self.clients):
+            live_status['_all_failed'] = True
+        else:
+            live_status['_all_failed'] = False
 
         return live_status
 

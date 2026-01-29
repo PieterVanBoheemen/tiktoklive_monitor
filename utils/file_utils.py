@@ -17,7 +17,7 @@ def safe_create_directory(directory: Path) -> bool:
         directory.mkdir(parents=True, exist_ok=True)
         return True
     except Exception as e:
-        logger.error(f"Failed to create directory {directory}: {e}")
+        logger.error(f"❌ Failed to create directory {directory}: {e}")
         return False
 
 
@@ -32,10 +32,10 @@ def safe_read_json(file_path: Path) -> Optional[Dict[str, Any]]:
         logger.debug(f"JSON file not found: {file_path}")
         return None
     except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in {file_path}: {e}")
+        logger.error(f"❌ Invalid JSON in {file_path}: {e}")
         return None
     except Exception as e:
-        logger.error(f"Error reading JSON file {file_path}: {e}")
+        logger.error(f"❌ Error reading JSON file {file_path}: {e}")
         return None
 
 
@@ -48,7 +48,7 @@ def safe_write_json(file_path: Path, data: Dict[str, Any]) -> bool:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
-        logger.error(f"Error writing JSON file {file_path}: {e}")
+        logger.error(f"❌ Error writing JSON file {file_path}: {e}")
         return False
 
 
@@ -63,7 +63,7 @@ def cleanup_file(file_path: Path) -> bool:
             return True
         return True  # File doesn't exist, consider it cleaned up
     except Exception as e:
-        logger.warning(f"Could not remove file {file_path}: {e}")
+        logger.warning(f"⚠️  Could not remove file {file_path}: {e}")
         return False
 
 

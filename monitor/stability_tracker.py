@@ -7,14 +7,14 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from config.config_manager import ConfigManager
+# if TYPE_CHECKING:
+from config.config_manager import ConfigManager
 
 
 class StabilityTracker:
     """Tracks stream status stability to prevent rapid cycling"""
 
-    def __init__(self, config_manager: 'ConfigManager'):
+    def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
         self.stream_stability: Dict[str, Dict[str, Any]] = {}
@@ -25,17 +25,20 @@ class StabilityTracker:
 
     def track_stream_stability(self, username: str, is_live: bool, current_recording: bool) -> bool:
         """Enhanced stream status stability tracking to prevent rapid cycling"""
+        # now for all the checks
+        now = datetime.now()
+
         if username not in self.stream_stability:
             self.stream_stability[username] = {
                 'recent_checks': [],
-                'last_action_time': datetime.now() - timedelta(minutes=10),  # Allow immediate first action
+                'last_action_time': now - timedelta(minutes=10),  # Allow immediate first action
                 'consecutive_live': 0,
                 'consecutive_offline': 0,
                 'last_status': None
             }
 
         stability_info = self.stream_stability[username]
-        now = datetime.now()
+        
 
         # Keep only recent checks (last 10 minutes for better historical context)
         stability_info['recent_checks'] = [
@@ -48,19 +51,17 @@ class StabilityTracker:
 
         # Update consecutive counters
         if is_live:
+            stability_info['consecutive_offline'] = 0
             if stability_info['last_status'] == True:
                 stability_info['consecutive_live'] += 1
-                stability_info['consecutive_offline'] = 0
             else:
                 stability_info['consecutive_live'] = 1
-                stability_info['consecutive_offline'] = 0
         else:
+            stability_info['consecutive_live'] = 0
             if stability_info['last_status'] == False:
                 stability_info['consecutive_offline'] += 1
-                stability_info['consecutive_live'] = 0
             else:
                 stability_info['consecutive_offline'] = 1
-                stability_info['consecutive_live'] = 0
 
         stability_info['last_status'] = is_live
 
@@ -86,7 +87,7 @@ class StabilityTracker:
 
         return False
 
-    def update_config(self, config_manager: 'ConfigManager'):
+    def update_config(self, config_manager: ConfigManager):
         """Update stability settings when config changes"""
         self.config_manager = config_manager
         old_threshold = self.stability_threshold

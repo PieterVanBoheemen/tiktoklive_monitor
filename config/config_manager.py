@@ -17,10 +17,10 @@ class ConfigManager:
     def __init__(self, config_file: str = "streamers_config.json", session_id_override: Optional[str] = None):
         self.config_file = config_file
         self.session_id_override = session_id_override
+        self.logger = logging.getLogger(__name__)
         self.config = self.load_config()
         self.config_last_modified = self.get_config_mtime()
-        self.logger = logging.getLogger(__name__)
-
+        
         # Apply session ID override if provided
         if self.session_id_override:
             self.config['settings']['session_id'] = self.session_id_override
@@ -44,16 +44,14 @@ class ConfigManager:
         """Get the default configuration structure"""
         return {
             "streamers": {
-                "example_user1": {
-                    "username": "@example_user1",
+                "@example_user1": {
                     "enabled": True,
                     "session_id": None,
                     "tt_target_idc": None,
                     "tags": ["research", "category1"],
                     "notes": "Example streamer for research"
                 },
-                "example_user2": {
-                    "username": "@example_user2",
+                "@example_user2": {
                     "enabled": True,
                     "session_id": None,
                     "tt_target_idc": None,
@@ -64,6 +62,7 @@ class ConfigManager:
             "settings": {
                 "check_interval_seconds": 60,
                 "max_concurrent_recordings": 5,
+                "pause_monitoring_if_failure_seconds": 300,
                 "output_directory": "recordings",
                 "session_id": None,
                 "tt_target_idc": "us-eastred",
@@ -87,7 +86,7 @@ class ConfigManager:
                     # Validate and merge with defaults to ensure all required keys exist
                     return self._merge_with_defaults(config)
             except Exception as e:
-                self.logger.error(f"Error loading config: {e}")
+                self.logger.error(f"❌ Error loading config: {e}")
                 return self.get_default_config()
         else:
             # Create default config file
@@ -183,7 +182,7 @@ class ConfigManager:
                 return True
 
         except Exception as e:
-            self.logger.error(f"Error checking config changes: {e}")
+            self.logger.error(f"❌ Error checking config changes: {e}")
 
         return False
 
@@ -196,7 +195,9 @@ class ConfigManager:
 
     def get_streamer_config(self, username: str) -> dict:
         """Get configuration for a specific streamer"""
-        streamer_key = username.replace('@', '')
+        # keys are now the usernames, following line is commented out
+        # streamer_key = username.replace('@', '')
+        streamer_key = username
         return self.config['streamers'].get(streamer_key, {})
 
     def get_session_id_for_streamer(self, username: str) -> Optional[str]:
@@ -245,5 +246,5 @@ class ConfigManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Config validation error: {e}")
+            self.logger.error(f"❌ Config validation error: {e}")
             return False
