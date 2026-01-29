@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Streamer Priority Manager</title>
+  <title>Streamer Dashboard</title>
   <script src="static/Sortable.min.js"></script>
   <script src="static/streamers.js"></script>
   <link rel="stylesheet" href="static/streamers.css">
@@ -10,10 +10,12 @@
 <body>
 
 <h2>Streamers Dashboard</h2>
-<button id="hidDis" onclick="toggleViewDisabled()">Hide Disabled</button>
-<button id="hidOff" onclick="toggleViewOffline()">Hide Offline</button>
+<button id="hidDis" onclick="toggleViewDisabled()"></button>
+<button id="hidOff" onclick="toggleViewOffline()"></button>
 <button onclick="openAddModal()">Add Streamer</button>
 <button onclick="saveConfig()">Save Config</button>
+<button onclick="openFiles()">Open files</button>
+<button id="pausMon" onclick="togglePause()"></button>
 <button onclick="stopMonitor()">Stop Monitor</button>
 
 <div class="container">

@@ -1,5 +1,13 @@
-// Constants
+// Constant labels
+const RES_MON = "Resume Monitor"
+const PAUSE_MON = "Pause Monitor"
+const SHOW_DIS = "Show Disabled"
+const HIDE_DIS = "Hide Disabled"
+const SHOW_OFF = "Show Offline"
+const HIDE_OFF = "Hide Offline"
+
 const refresh_rate_sec = 10;
+
 
 // UI Status variables
 var btn_hideDisabled = false;
@@ -16,6 +24,14 @@ async function load_streamers() {
   const res = await fetch("/api/streamers");
   const data = await res.json();
   return data;  
+}
+
+/* Return whether the monitoring is paused or not */
+async function get_pauseStatus() {
+  const res = await fetch("/api/is_paused");
+  const data = await res.json();
+  
+  return data.is_paused;
 }
 
 //
@@ -69,6 +85,36 @@ function normalizeUsername(raw) {
   }
 
   return username;
+}
+
+async function show_buttons() {
+  let btn = document.getElementById("hidDis");
+  if (btn_hideDisabled){
+    btn.innerText = SHOW_DIS
+  }else{
+    btn.innerText = HIDE_DIS
+  }
+  btn = document.getElementById("hidOff");
+  if (btn_hideOffline){
+    btn.innerText = SHOW_OFF
+  }else{
+    btn.innerText = HIDE_OFF
+  }
+  btn = document.getElementById("pausMon");
+  let is_paused = await get_pauseStatus();
+  if (is_paused){
+    btn.innerText = RES_MON
+  }else{
+    btn.innerText = PAUSE_MON
+  }
+
+}
+
+function openFiles() {
+  const tab = window.open("/files", "_blank");
+
+  // to redirect or update if needed
+  // tab.location.href = "/files?refresh=1";
 }
 
 async function show_streamers() {
@@ -143,31 +189,21 @@ async function toggleEnable(name, toDisable) {
     showMessage(resp_json.error);
     return;
   }else{
-    show_streamers();
+    await show_streamers();
   }
   return;
 }
 /* Hide/show disabled streamers */
 async function toggleViewDisabled() {
   btn_hideDisabled = !btn_hideDisabled;
-  const btn = document.getElementById("hidDis");
-  if (btn_hideDisabled){
-    btn.innerText = "Show Disabled"
-  }else{
-    btn.innerText = "Hide Disabled"
-  }
-  show_streamers();
+  await show_buttons();
+  await show_streamers();
 }
 /* Hide/show streamers that are not live*/
 async function toggleViewOffline() {
   btn_hideOffline = !btn_hideOffline;
-  const btn = document.getElementById("hidOff");
-  if (btn_hideOffline){
-    btn.innerText = "Show Offline"
-  }else{
-    btn.innerText = "Hide Offline"
-  }
-  show_streamers();
+  await show_buttons();
+  await show_streamers();
 }
 /* Save conf with possibly added streamer */
 async function saveConfig() {
@@ -181,6 +217,31 @@ async function saveConfig() {
   }
   return;
 }
+/* Pause/resume monitoring */
+async function togglePause() {
+  // Read the status and toggle it
+  let is_paused = await get_pauseStatus();
+  // Check the action is already performed from another UI
+  const btn = document.getElementById("pausMon");
+  if ( ((btn.innerText == RES_MON) && (!is_paused)) ||
+       ((btn.innerText == PAUSE_MON) && (is_paused))
+  ){
+    showMessage("Monitoring has already been " + is_paused?"paused":"resumed");
+  }else{
+    const resp = await fetch("/api/toggle_pause", { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({is_paused:!is_paused})
+      }
+    );
+    const resp_json = await resp.json();
+    if (!resp_json.ok) {
+      showMessage(resp_json.error);
+    }
+  }
+  await show_buttons();    
+}
+
 
 /* Stop monitoring initiating graceful shutdown */
 async function stopMonitor() {
@@ -189,7 +250,7 @@ async function stopMonitor() {
   if (!resp_json.ok) {
     showMessage(resp_json.error);
   }else{
-    showMessage("Graceful shutdown initiated, UI will not refresh");
+    showMessage("Graceful shutdown initiated. UI will stop refreshing");
     stopCalled = true;
   }
   return;
@@ -240,7 +301,7 @@ async function confirmAddStreamer() {
     return;
   }
 
-  show_streamers();
+  await show_streamers();
   closeAddModal();
   showMessage(`Streamer ${username} added successfully.`);
 
@@ -254,11 +315,19 @@ async function confirmAddStreamer() {
 // Refresh UI
 //
 
-/** Refresh the streamers periodically */
+/** Refresh the streamers and the buttons periodically */
 async function refreshLoop() {
+  // Do it at least initially
+  await show_streamers();
+  await show_buttons();
   while (true) {
-    if (!userActive && !stopCalled) {
+    if (stopCalled){
+      break;
+    }
+    is_paused = await get_pauseStatus()
+    if (!userActive && !is_paused) {
       await show_streamers();
+      await show_buttons();
     }
     await new Promise(r => setTimeout(r, refresh_rate_sec*1000));
   }
