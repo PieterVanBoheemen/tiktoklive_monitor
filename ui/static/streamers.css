@@ -92,3 +92,15 @@ body { font-family: sans-serif; }
   justify-content: space-between;
 }
 
+label {
+  display: block;
+  margin-top: 10px;
+}
+button {
+  margin-top: 15px;
+  margin-right: 10px;
+}
+#status {
+  margin-top: 15px;
+  font-weight: bold;
+}

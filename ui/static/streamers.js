@@ -28,7 +28,7 @@ async function load_streamers() {
 
 /* Return whether the monitoring is paused or not */
 async function get_pauseStatus() {
-  const res = await fetch("/api/is_paused");
+  const res = await fetch("/monitor/is_paused");
   const data = await res.json();
   
   return data.is_paused;
@@ -228,7 +228,7 @@ async function togglePause() {
   ){
     showMessage("Monitoring has already been " + is_paused?"paused":"resumed");
   }else{
-    const resp = await fetch("/api/toggle_pause", { 
+    const resp = await fetch("/monitor/toggle_pause", { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({is_paused:!is_paused})
@@ -245,7 +245,7 @@ async function togglePause() {
 
 /* Stop monitoring initiating graceful shutdown */
 async function stopMonitor() {
-  const resp = await fetch("/api/stop", { method: "POST" });
+  const resp = await fetch("/monitor/stop", { method: "POST" });
   const resp_json = await resp.json();
   if (!resp_json.ok) {
     showMessage(resp_json.error);
