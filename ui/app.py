@@ -306,12 +306,18 @@ class TikUIApp:
                 # special case: disabled
                 if req.start_time == time(0, 0, 0) and req.end_time == time(0, 0, 0):
                     self.schedule_state.cancel_tasks()
-                    return {"status": "schedule disabled"}
+                    # Reactivate monitoring (safe option, maybe not what the user wanted)
+                    # self.monitor.pause_monitoring(to_pause=False)
+                    # Better ask the user
+                    if self.monitor.is_mon_paused():
+                        return {"status": f"Schedule disabled, monitor paused, you might want to resume it"}
+                    else:
+                        return {"status": f"Schedule disabled"}
 
                 # schedule new triggers
                 self.schedule_state.create_schedule(req.start_time,req.end_time)
                 
-                return {"status": "schedule activated"}
+                return {"status": "Schedule activated"}
 
     def setup_file_routes(self):
         # ---------- Static HTML ----------

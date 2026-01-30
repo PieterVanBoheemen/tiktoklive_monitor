@@ -19,7 +19,7 @@ async function applySchedule() {
   });
 
   const data = await resp.json();
-  setStatus(`Result: ${data.status}`);
+  setStatus(`${data.status}`);
 }
 
 async function disableSchedule() {
