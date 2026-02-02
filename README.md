@@ -36,9 +36,6 @@ This tool monitors multiple TikTok streamers simultaneously and automatically st
 ```bash
 # Install Python 3.8+ and pip
 python3 --version
-
-# Install required package
-pip install TikTokLive
 ```
 
 ### Installation
@@ -47,8 +44,8 @@ pip install TikTokLive
 git clone https://github.com/pietervanboheemen/tiktoklive_monitor.git
 cd tiktoklive_monitor
 
-# Install dependencies
-pip install TikTokLive
+# Install required package
+pip install -r requirements.txt
 
 # Create required directories
 mkdir recordings
@@ -268,22 +265,21 @@ sudo systemctl enable tiktok-monitor
 sudo systemctl start tiktok-monitor
 ```
 
+#### Using the provided scripts from command line
+You can also run the app using two provided script:
+- `startDevelopment.sh` for development purposes
+- `startProduction.sh` for running the app in a `screen` process with logging to file.
+
+Both scripts will make use of an API_KEY in the `.api_key` file if one is present. This api key is for euler signing service, and allows to increase the rate limits. You can create your free api key [here](https://www.eulerstream.com/dashboard).
+
 #### Using Docker
-```dockerfile
-FROM python:3.9-slim
+Use the script `startDocker.sh` with -r (run) option.
+This script will build a python image and run the container, using the provided `Dockerfile`, which takes care of installing dependencies and running the app (with API_KEY if present, as described above).
 
-WORKDIR /app
-COPY . .
-RUN pip install TikTokLive
+The script also maps the port 8000 in the container to localhost:8000, so you can see the web UI if you can access the server's 8000 port, for example with an ssh tunnel.
 
-CMD ["python3", "main.py", "-c", "config.json"]
-```
 
-Build and run:
-```bash
-docker build -t tiktok-monitor .
-docker run -v $(pwd)/recordings:/app/recordings tiktok-monitor
-```
+
 
 ## 📊 Monitoring & Analytics
 
@@ -308,6 +304,18 @@ Check `monitor_status.txt` for real-time status:
   "pending_disconnects": 0
 }
 ```
+
+## The Web UI
+
+Via the web UI running on `localhost:8000` you can see which users are enabled, online, and being recorded.
+
+You can also add streamers, and stop and pause the monitor. You can further inspect the recordings directory to see 
+what files have been written to disk and download them if you want.
+
+Finally, there is a schedule to pause the monitor between two time slots, for example at night.
+
+All pause functionality does not stop running recordings, just the monitor for users going live.
+
 
 ## 🔍 Troubleshooting
 
@@ -349,6 +357,9 @@ chown -R $USER:$USER recordings/
 ```bash
 # Maximum verbosity for troubleshooting
 python3 main.py --verbose -c config.json
+
+# you can enable breakpoints for unusual situation with
+python3 main.py --test -c config.json
 
 # Check specific component
 python3 -c "
