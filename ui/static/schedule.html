@@ -12,16 +12,16 @@
 
 <label>
   Start time:
-  <input type="time" id="startTime" step="1">
+  <input type="time" id="startTime" step="60">
 </label>
 
 <label>
   End time:
-  <input type="time" id="endTime" step="1">
+  <input type="time" id="endTime" step="60">
 </label>
 
-<button onclick="applySchedule()">Apply</button>
-<button onclick="disableSchedule()">Disable</button>
+<button id="applyBtn" onclick="applySchedule()">Apply</button>
+<button id="disableBtn" onclick="disableSchedule()">Disable</button>
 
 <div id="status"></div>
 

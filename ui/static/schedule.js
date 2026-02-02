@@ -1,4 +1,4 @@
-UTC_OFFSET = 0;
+var UTC_OFFSET = 0;
 
 async function applySchedule() {
   const start = document.getElementById("startTime").value;
@@ -6,6 +6,11 @@ async function applySchedule() {
 
   if (!start || !end) {
     setStatus("Please select both times", true);
+    return;
+  }
+  
+  if (start === end) {
+    setStatus("Start time and end time must be different", true);
     return;
   }
 
@@ -19,7 +24,10 @@ async function applySchedule() {
   });
 
   const data = await resp.json();
-  setStatus(`${data.status}`);
+  if (data.error){
+    setStatus(data.error, true);  
+  }
+  setStatus(data.status);
 }
 
 async function disableSchedule() {
@@ -37,6 +45,13 @@ async function disableSchedule() {
   setStatus("Schedule disabled");
 }
 
+function setStatus(msg, isError = false) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.style.color = isError ? "red" : "green";
+}
+
+// load backend state on open
 async function loadSchedule() {
   const resp = await fetch("/schedule");
   const data = await resp.json();
@@ -48,6 +63,9 @@ async function loadSchedule() {
   } else {
     setStatus("No active schedule");
   }
+}
+
+function utcOffset() {
   // Calculate UTC offset
   const date = new Date();
   const timezoneOffset = date.getTimezoneOffset();
@@ -60,11 +78,34 @@ async function loadSchedule() {
   UTC_OFFSET = UTC_OFFSET + offset.toString().padStart(2, '0') + ":00"
 }
 
-function setStatus(msg, isError = false) {
-  const el = document.getElementById("status");
-  el.textContent = msg;
-  el.style.color = isError ? "red" : "green";
+function attachValidators(){
+    const startTime = document.getElementById("startTime");
+    const endTime   = document.getElementById("endTime");
+    const applyBtn  = document.getElementById("applyBtn");
+
+    function validateInputs() {
+        const start = startTime.value;
+        const end   = endTime.value;
+
+        // valid only if both set and different
+        const valid = start && end && start !== end;
+
+        applyBtn.disabled = !valid;
+    }
+
+    // attach validation to live input changes
+    startTime.addEventListener("input", validateInputs);
+    endTime.addEventListener("input", validateInputs);
+
+    // initial state
+    validateInputs();
 }
 
-// load backend state on open
-loadSchedule();
+async function initPage() {
+    await loadSchedule();
+    attachValidators();
+    utcOffset();
+}
+
+initPage();
+

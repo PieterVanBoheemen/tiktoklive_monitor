@@ -35,6 +35,11 @@ body { font-family: sans-serif; }
     opacity: 0.4;
 }
 
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .item.live {
   background-color: #cdedcd;
   border-color: #00cc00;

@@ -21,6 +21,7 @@ from pydantic import BaseModel
 import uvicorn
 
 from monitor.stream_monitor import StreamMonitor
+from utils.system_utils import debug_breakpoint
 
 PRIORITY_GROUPS = ["high", "medium", "low"]
 
@@ -88,12 +89,15 @@ class ScheduleState:
         
         return start_task_active, end_task_active
 
-    async def trigger_action(self, value: bool):
+    def trigger_action(self, value: bool):
         self.logger.info(f"Scheduled action triggered: {value} at {datetime.now()}")
         # call real business logic here
         self.action(value)
         
         # reschedule the task that terminated
+        # Assumption is that the self.start_time is earlier than
+        # the time we calculate the next trigger, so that the next
+        # trigger will happen the next day.
         if value:
             self.start_task = asyncio.create_task(
                     self.schedule_trigger(self.start_time, True)
@@ -108,7 +112,7 @@ class ScheduleState:
         
         try:
             await asyncio.sleep(delay)
-            await self.trigger_action(value)
+            self.trigger_action(value)
         except asyncio.CancelledError:
             pass  # expected on reschedule
     
@@ -137,7 +141,7 @@ class ScheduleState:
         start_task_active, end_task_active = self.are_tasks_active()
 
         if start_task_active and end_task_active:
-            breakpoint()
+            debug_breakpoint()
             self.logger.warning("Cannot create schedule tasks if start and end tasks are both active")
             return False
         
@@ -313,6 +317,9 @@ class TikUIApp:
                         return {"status": f"Schedule disabled, monitor paused, you might want to resume it"}
                     else:
                         return {"status": f"Schedule disabled"}
+
+                if req.start_time == req.end_time:
+                    return {"error": "Start time and end time must be different"}
 
                 # schedule new triggers
                 self.schedule_state.create_schedule(req.start_time,req.end_time)
