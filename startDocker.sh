@@ -1,10 +1,16 @@
 app_name=tiktok_mon
 
-while getopts "blprs" options
+while getopts "bcglprs" options
 do
   case "${options}" in
     b)
       do_build=y
+      ;;
+    c)
+      do_cleanup=y
+      ;;
+    g)
+      get_conf=y
       ;;
     l)
       view_log=y
@@ -58,6 +64,20 @@ then
     docker logs -f ${app_name}_container
 fi
 
+if [ ! -z "${get_conf}" ]
+then
+    docker exec ${app_name}_container bash -c "ls /app/streamers_config_*.json" | while read line;
+    do
+      filenm=$(basename ${line})
+      # echo $filenm
+      if [ ! -f "${filenm}" ]
+      then
+        docker cp ${app_name}_container:$line ./;
+      else
+        echo "Not overwriting file ${filenm}"
+      fi
+    done
+fi
 
 if [ ! -z "${do_stop}" ]
 then
@@ -65,3 +85,20 @@ then
     docker exec ${app_name}_container touch /app/stop_monitor.txt
 fi
 
+if [ ! -z "${do_cleanup}" ]
+then
+    echo "Before cleanup:"
+    docker system df
+    # List and remove unused containers
+    # To kill all containers: docker rm $(docker ps -a -q)
+    docker ps --filter status=exited --filter status=dead -s
+    docker container prune -f
+    # Remove images
+    docker image prune -a -f
+    # To clear the build cache of the default builder
+    docker buildx prune -f
+    # To remove all unused containers, images, networks, and build cache: docker system prune -af
+    echo "After cleanup:"
+    docker system df
+
+fi
