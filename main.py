@@ -16,6 +16,7 @@ from config.config_manager import ConfigManager
 from monitor.stream_monitor import StreamMonitor
 from utils.logging_setup import setup_logging
 from utils.system_utils import setup_platform_specific, activate_debug_breakpoint, debug_breakpoint
+from ui.app import start_server
 
 def parse_args():
     """Parse command line arguments"""
@@ -111,26 +112,6 @@ def print_startup_info(args):
     print()
 
 
-def apply_command_line_overrides(config_manager, args):
-    """Apply command line argument overrides to configuration"""
-    # TODO: decide what command line arguments should be reinstated when check_config_changes is run,
-    # at the moment just the session id but not the parameters in this function, and in case
-    # refactor ConfigManager to accept args directly, keep them and reinstate them on reload
-    logger = logging.getLogger(__name__)
-
-    if args.data_center:
-        config_manager.config['settings']['tt_target_idc'] = args.data_center
-        logger.info(f"🌍 Data center overridden to: {args.data_center}")
-
-    if args.check_interval:
-        config_manager.config['settings']['check_interval_seconds'] = args.check_interval
-        logger.info(f"⏱️  Check interval overridden to: {args.check_interval}s")
-
-    if args.output_dir:
-        config_manager.config['settings']['output_directory'] = args.output_dir
-        logger.info(f"📁 Output directory overridden to: {args.output_dir}")
-
-
 async def main():
     """Main entry point"""
     args = parse_args()
@@ -150,18 +131,22 @@ async def main():
 
     try:
         # Initialize configuration manager
-        config_manager = ConfigManager(
-            config_file=args.config,
-            session_id_override=args.session_id
-        )
-
-        # Apply command line overrides
-        apply_command_line_overrides(config_manager, args)
+        config_manager = ConfigManager(args)
 
         # Create and run the stream monitor
         monitor = StreamMonitor(config_manager)
-        await monitor.run()
 
+        mon_task = asyncio.create_task(monitor.run())
+        ui_task = asyncio.create_task(start_server(monitor))
+
+        await mon_task  # Wait for monitoring to complete
+        # ui_task.cancel()  # Cancel server running the ui when monitoring is done
+        
+        # Graceful shutdown
+        monitor.uvicorn_server.should_exit = True
+        await ui_task
+    
+                
     except FileNotFoundError as e:
         logger.error(f"❌ Configuration file not found: {e}")
         sys.exit(1)
@@ -169,6 +154,9 @@ async def main():
         # Due to the signal handling, this may not be reached
         logger.info("\n👋 Monitor stopped by user")
         sys.exit(0)
+    except asyncio.exceptions.CancelledError as e:
+        logger.warning(f"Caught task cancelation, this should not happen")
+        sys.exit(1)
     except Exception as e:
         logger.error(f"❌ Fatal error: {e}")
         if platform.system() == "Windows":
@@ -193,3 +181,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n👋 Monitor stopped by user")
         sys.exit(0)
+    except Exception as e:
+        print(f"❌ Fatal error in main execution: {e}")
+        sys.exit(1)

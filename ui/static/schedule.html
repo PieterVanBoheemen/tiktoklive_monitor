@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Schedule Control</title>
+  <script src="static/schedule.js"></script>
+  <link rel="stylesheet" href="static/streamers.css">
+</head>
+<body>
+
+<h2>Inactivity Schedule</h2>
+
+<label>
+  Start time:
+  <input type="time" id="startTime" step="60">
+</label>
+
+<label>
+  End time:
+  <input type="time" id="endTime" step="60">
+</label>
+
+<button id="applyBtn" onclick="applySchedule()">Apply</button>
+<button id="disableBtn" onclick="disableSchedule()">Disable</button>
+
+<div id="status"></div>
+
+
+</body>
+</html>

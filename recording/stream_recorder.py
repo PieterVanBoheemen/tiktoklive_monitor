@@ -56,6 +56,9 @@ class StreamRecorder:
 
         try:
             # Avoid too many simultaneous recordings since dict is not incremented until after await
+            # Consider using an asyncio.Semaphore instead of this, but the problem is that the 
+            # max_concurrent_recordings in the config can change, and thus the semaphore would need
+            # to be recreated.
             if username not in self.active_recordings:
                 self.active_recordings[username] = {}
             else:
@@ -108,10 +111,12 @@ class StreamRecorder:
 
             # Cleanup on failure
             # Remove from active recordings
-            if username in self.active_recordings and self.active_recordings[username] != {}:
-                # username should not be present in active_recordings, in case this happens there might be some cleanup
-                # to be performed, but this case does not seem possible at the current state of the software
-                self.logger.warning(f"⚠️  Deleting {username} from active recordings without cleanup (this should not happen)")
+            if username in self.active_recordings:
+                if self.active_recordings[username] != {}:
+                    # username should not be present in active_recordings, in case this happens there might be some cleanup
+                    # to be performed, but this case does not seem possible at the current state of the software
+                    self.logger.warning(f"⚠️  Deleting {username} from active recordings without cleanup (this should not happen)")
+                    debug_breakpoint()
                 del self.active_recordings[username]
 
             if self.csv_writer.is_writing(username):

@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Streamer Dashboard</title>
+  <script src="static/Sortable.min.js"></script>
+  <script src="static/streamers.js"></script>
+  <link rel="stylesheet" href="static/streamers.css">
+</head>
+<body>
+
+<h2>Streamers Dashboard</h2>
+<button id="hidDis" onclick="toggleViewDisabled()"></button>
+<button id="hidOff" onclick="toggleViewOffline()"></button>
+<button onclick="openAddModal()">Add Streamer</button>
+<button onclick="saveConfig()">Save Config</button>
+<button onclick="openFiles()">Open files</button>
+<button id="pausMon" onclick="togglePause()"></button>
+<button onclick="stopMonitor()">Stop Monitor</button>
+<button onclick="window.open('/schedule-ui', '_blank')">
+  Open schedule control
+</button>
+
+<div class="container">
+  <div class="column">
+    <h3>High</h3>
+    <ul id="high"></ul>
+  </div>
+  <div class="column">
+    <h3>Medium</h3>
+    <ul id="medium"></ul>
+  </div>
+  <div class="column">
+    <h3>Low</h3>
+    <ul id="low"></ul>
+  </div>
+</div>
+
+
+<!-- Add Streamer Modal -->
+<div id="addModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Add Streamer</h3>
+
+    <input id="new-username" placeholder="@username" oninput="this.value = this.value.replace(/\s+/g, '')" />
+    <select id="new-priority-group">
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+    <input id="new-tags" placeholder="tags (comma-separated)" />
+    <input id="new-notes" placeholder="notes" />
+    <select id="new-enabled">
+      <option value="enabled">Enabled</option>
+      <option value="disabled">Disabled</option>
+    </select>
+
+
+    <div class="modal-buttons">
+      <button onclick="confirmAddStreamer()">Add</button>
+      <button onclick="closeAddModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Message Modal -->
+<div id="msgModal" class="modal hidden">
+  <div class="modal-content">
+    <p id="msgText"></p>
+    <button onclick="closeMsgModal()">OK</button>
+  </div>
+</div>
+
+<script>
+show_streamers();
+</script>
+</body>
+</html>

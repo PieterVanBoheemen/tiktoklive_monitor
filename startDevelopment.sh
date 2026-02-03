@@ -1,0 +1,1 @@
+./start.sh DEV streamers_config.json

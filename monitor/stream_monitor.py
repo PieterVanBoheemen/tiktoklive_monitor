@@ -29,6 +29,8 @@ class StreamMonitor:
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
         self.monitoring = True
+        self.is_paused = False
+        self.live_status = {}
 
         # Initialize components
         self.session_logger = SessionLogger()
@@ -101,10 +103,9 @@ class StreamMonitor:
                 if config_changed:
                     # Update components with new config
                     self.stability_tracker.update_config(self.config_manager)
-                    enabled_streamers = self.config_manager.get_enabled_streamers()
 
                 # Check for control signals
-                control_signal = self.shutdown_handler.check_control_signals()
+                control_signal = self.shutdown_handler.check_control_files()
 
                 if control_signal.startswith("stop:"):
                     reason = control_signal.split(":", 1)[1]
@@ -120,86 +121,93 @@ class StreamMonitor:
 
                 elif control_signal.startswith("pause:"):
                     duration = int(control_signal.split(":", 1)[1])
-                    await self.shutdown_handler.handle_pause_signal(duration)
+                    await self.shutdown_handler.handle_pause_file_signal(duration)
                     continue
 
-                check_count += 1
-                start_time = asyncio.get_event_loop().time()
-
-                if len(self.recorder.get_active_recordings()) >= self.config_manager.config['settings']['max_concurrent_recordings']:
-                    self.logger.info("⏸️  Max concurrent recordings reached, skipping this check cycle")
-                    self.logger.info("Currently recording: " + ", ".join(self.recorder.get_active_recordings().keys()))
-                else:
-                    # initialize list to track actions taken this cycle
-                    actions_taken = []
+                # Initialise the duration of the checks in case we skip them
+                check_duration = 0
+                
+                if not self.is_paused:
+                    check_count += 1
+                    start_time = asyncio.get_event_loop().time()
                     
-                    # Prepare list of streamers to check (exclude currently recording)
-                    check_streamers = dict((k, v) for k, v in enabled_streamers.items() if not self.recorder.is_recording(k))
-                    self.logger.debug(f"🔄 Check cycle #{check_count} - Checking {len(check_streamers)} streamers in parallel...")
-                    
-                    # Check streamers that are not currently recording in parallel
-                    live_status = await self.stream_checker.check_all_streamers_parallel(check_streamers)
+                    # we always check the streamers (and not just when the conf file has changed) in case anything has been added
+                    enabled_streamers = self.config_manager.get_enabled_streamers()
 
-                    if live_status.get('_all_failed', True):
-                        # Throttle if all failed
-                        sec_pause = self.config_manager.config['settings'].get('pause_monitoring_if_failure_seconds', 300)
-                        self.logger.warning(f"⚠️  All streamer checks failed, throttling monitoring temporarily for {sec_pause} seconds")
-                        await self._sleep_with_monitoring_check(sec_pause)
-
+                    if len(self.recorder.get_active_recordings()) >= self.config_manager.config['settings']['max_concurrent_recordings']:
+                        self.logger.info("⏸️  Max concurrent recordings reached, skipping this check cycle")
+                        self.logger.info("Currently recording: " + ", ".join(self.recorder.get_active_recordings().keys()))
                     else:
-                        # Process results with stability checking
-                        for username, is_live in live_status.items():
-                            current_recording = self.recorder.is_recording(username)
+                        # initialize list to track actions taken this cycle
+                        actions_taken = []
+                        
+                        # Prepare list of streamers to check (exclude currently recording)
+                        check_streamers = dict((k, v) for k, v in enabled_streamers.items() if not self.recorder.is_recording(k))
+                        self.logger.debug(f"🔄 Check cycle #{check_count} - Checking {len(check_streamers)} streamers in parallel...")
+                        
+                        # Check streamers that are not currently recording in parallel
+                        self.live_status = await self.stream_checker.check_all_streamers_parallel(check_streamers)
 
-                            # Use stability tracking to determine if action should be taken
-                            should_act = self.stability_tracker.track_stream_stability(username, is_live, current_recording)
+                        if self.live_status.get('_all_failed', True):
+                            # Throttle if all failed
+                            sec_pause = self.config_manager.config['settings'].get('pause_monitoring_if_failure_seconds', 300)
+                            self.logger.warning(f"⚠️  All streamer checks failed, throttling monitoring temporarily for {sec_pause} seconds")
+                            await self._sleep_with_monitoring_check(sec_pause)
 
-                            if should_act and is_live and not current_recording:
-                                # Start recording
-                                self.logger.info(f"🟢 {username} went LIVE! (stability confirmed)")
-                                asyncio.create_task(self.recorder.start_recording(username))
-                                actions_taken.append(f"{username}:LIVE")
+                        else:
+                            # Process results with stability checking
+                            for username, is_live in self.live_status.items():
+                                current_recording = self.recorder.is_recording(username)
 
-                    # Get current state for status updates
-                    currently_live = [username for username, is_live in live_status.items() if is_live]
-                    currently_recording = list(self.recorder.active_recordings.keys())
-                    pending_disconnects = list(self.recorder.pending_disconnects.keys())
+                                # Use stability tracking to determine if action should be taken
+                                should_act = self.stability_tracker.track_stream_stability(username, is_live, current_recording)
 
-                    # Calculate check duration
-                    check_duration = asyncio.get_event_loop().time() - start_time
+                                if should_act and is_live and not current_recording:
+                                    # Start recording
+                                    self.logger.info(f"🟢 {username} went LIVE! (stability confirmed)")
+                                    asyncio.create_task(self.recorder.start_recording(username))
+                                    actions_taken.append(f"{username}:LIVE")
 
-                    # Update status file
-                    status_info = f"Check #{check_count}, duration: {check_duration:.1f}s"
-                    if live_status.get('_all_failed', True):
-                        status_info += ", all checks failed"
-                    if pending_disconnects:
-                        status_info += f", pending disconnects: {len(pending_disconnects)}"
+                        # Get current state for status updates
+                        currently_live = [username for username, is_live in self.live_status.items() if is_live]
+                        currently_recording = list(self.recorder.active_recordings.keys())
+                        pending_disconnects = list(self.recorder.pending_disconnects.keys())
 
-                    self.status_manager.update_status_file(
-                        "monitoring",
-                        status_info,
-                        currently_recording,
-                        pending_disconnects
-                    )
+                        # Calculate check duration
+                        check_duration = asyncio.get_event_loop().time() - start_time
 
-                    # Status logging with cleaner output
-                    self._log_monitoring_status(
-                        check_count, len(check_streamers), currently_live,
-                        currently_recording, pending_disconnects, check_duration,
-                        actions_taken, config_changed
-                    )
+                        # Update status file
+                        status_info = f"Check #{check_count}, duration: {check_duration:.1f}s"
+                        if self.live_status.get('_all_failed', True):
+                            status_info += ", all checks failed"
+                        if pending_disconnects:
+                            status_info += f", pending disconnects: {len(pending_disconnects)}"
 
-                # Periodic cleanup
-                if check_count % 50 == 0:  # Every 50 cycles
-                    # debug_breakpoint()
-                    rl_task = asyncio.create_task(check_rate_limit())
-                    await self._periodic_cleanup()
-                    limits_info = await rl_task
-                    if 'error' in limits_info:
-                        self.logger.warning(f"⚠️  Rate limit check error: {limits_info['error']}")
-                    elif 'info' in limits_info:
-                        self.logger.info(f"✅ Rate limits: {limits_info['info']}")
-                        self.logger.debug(f"Dump of rate limits: {limits_info['rate_limits']}")
+                        self.status_manager.update_status_file(
+                            "monitoring",
+                            status_info,
+                            currently_recording,
+                            pending_disconnects
+                        )
+
+                        # Status logging with cleaner output
+                        self._log_monitoring_status(
+                            check_count, len(check_streamers), currently_live,
+                            currently_recording, pending_disconnects, check_duration,
+                            actions_taken, config_changed
+                        )
+
+                    # Periodic cleanup
+                    if check_count % 50 == 0:  # Every 50 cycles
+                        # debug_breakpoint()
+                        rl_task = asyncio.create_task(check_rate_limit())
+                        await self._periodic_cleanup()
+                        limits_info = await rl_task
+                        if 'error' in limits_info:
+                            self.logger.warning(f"⚠️  Rate limit check error: {limits_info['error']}")
+                        elif 'info' in limits_info:
+                            self.logger.info(f"✅ Rate limits: {limits_info['info']}")
+                            self.logger.debug(f"Dump of rate limits: {limits_info['rate_limits']}")
                     
                 # Dynamic sleep with interrupt checking
                 base_interval = self.config_manager.config['settings']['check_interval_seconds']
@@ -251,6 +259,21 @@ class StreamMonitor:
         if check_duration > base_interval * 0.8:  # If check takes more than 80% of interval
             self.logger.warning(f"⚠️  Check cycle took {check_duration:.1f}s (target: {base_interval}s)")
 
+    def pause_monitoring(self, to_pause: bool) -> None:
+        """Pause the monitoring, used for interfaces that do not use the file system mechanism, such as the Web UI"""
+        if to_pause == self.is_paused:
+            self.logger.debug(f'Requested to {"pause" if to_pause else "resume"} the monitor, but monitoring is already {"pause" if to_pause else "resume"}d')
+        else:
+            if to_pause:
+                self.logger.info(f'Pausing Monitoring')
+            else:
+                self.logger.info(f'Resuming Monitoring')
+            self.is_paused = to_pause
+
+    def is_mon_paused(self) -> bool:
+        """Get the status of the monitoring"""
+        return self.is_paused
+
     async def _sleep_with_monitoring_check(self, duration: float):
         """Sleep between checks while remaining responsive to shutdown signals"""
 
@@ -300,14 +323,19 @@ class StreamMonitor:
 
     # Properties for backward compatibility and easy access
     @property
-    def active_recordings(self) -> Dict[str, any]:
-        """Get active recordings"""
-        return self.recorder.active_recordings
+    def active_recordings(self) -> list[str]:
+        """Get usernames of active recordings"""
+        return list(self.recorder.active_recordings.keys())
 
     @property
     def pending_disconnects(self) -> Dict[str, any]:
         """Get pending disconnects"""
         return self.recorder.pending_disconnects
+    
+    @property
+    def live_streamers(self) -> list[str]:
+        """Get streamers who are live"""
+        return [username for username, is_live in self.live_status.items() if is_live]
 
     def update_status_file(self, status: str, extra_info: str = ""):
         """Update status file (for backward compatibility)"""

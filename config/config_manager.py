@@ -6,7 +6,6 @@ Handles loading, reloading, and validation of configuration files
 import json
 import logging
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -14,9 +13,9 @@ from typing import Dict, Optional
 class ConfigManager:
     """Manages configuration loading, reloading, and validation"""
 
-    def __init__(self, config_file: str = "streamers_config.json", session_id_override: Optional[str] = None):
-        self.config_file = config_file
-        self.session_id_override = session_id_override
+    def __init__(self, args: Dict):
+        self.config_file = args.config
+        self.session_id_override = args.session_id
         self.logger = logging.getLogger(__name__)
         self.config = self.load_config()
         self.config_last_modified = self.get_config_mtime()
@@ -30,8 +29,26 @@ class ConfigManager:
         else:
             self.logger.info("ℹ️  No session ID provided - only public streams accessible")
 
+        # Apply command line argument overrides to configuration
+        self.data_center = args.data_center
+        if self.data_center:
+            self.config['settings']['tt_target_idc'] = self.data_center
+            self.logger.info(f"🌍 Data center overridden to: {self.data_center}")
+
+        self.check_interval = args.check_interval
+        if self.check_interval:
+            self.config['settings']['check_interval_seconds'] = self.check_interval
+            self.logger.info(f"⏱️  Check interval overridden to: {self.check_interval}s")
+
+        self.output_dir = args.output_dir
+        if self.output_dir:
+            self.config['settings']['output_directory'] = self.output_dir
+            self.logger.info(f"📁 Output directory overridden to: {self.output_dir}")
+
+
         # Setup environment variables for authenticated sessions
         self._setup_authentication()
+    
 
     def _setup_authentication(self):
         """Setup authentication environment variables"""
@@ -143,9 +160,19 @@ class ConfigManager:
                 # Reload config
                 new_config = self.load_config()
 
+                # TODO: decide what command line arguments should be reinstated when check_config_changes is run,
                 # Preserve command line session ID override
                 if self.session_id_override:
                     new_config['settings']['session_id'] = self.session_id_override
+
+                if self.data_center:
+                    self.config['settings']['tt_target_idc'] = self.data_center
+
+                if self.check_interval:
+                    self.config['settings']['check_interval_seconds'] = self.check_interval
+
+                if self.output_dir:
+                    self.config['settings']['output_directory'] = self.output_dir
 
                 self.config = new_config
                 self.config_last_modified = current_mtime
@@ -193,6 +220,52 @@ class ConfigManager:
             if v.get('enabled', True)
         }
 
+    def get_streamers(self) -> Dict[str, dict]:
+        """Get all streamers from configuration"""
+        return self.config['streamers']
+    
+    def get_settings(self) -> Dict[str, dict]:
+        """Get the current settings"""
+        return self.config['settings']
+    
+    def enable_streamer(self, streamer:str) -> bool:
+        """Enable a streamer"""
+        if not streamer in self.config['streamers']:
+            self.logger.error(f"Trying to enable a non-existing streamer {streamer}")
+            return False
+        else:
+            self.config['streamers'][streamer]['enabled'] = True
+        return True
+    
+    def disable_streamer(self, streamer:str) -> bool:
+        """Disable a streamer"""
+        if not streamer in self.config['streamers']:
+            self.logger.error(f"Trying to disable a non-existing streamer {streamer}")
+            return False
+        else:
+            self.config['streamers'][streamer]['enabled'] = False
+        return True
+    
+    def set_streamer_priority(self, streamer:str, priority_group:str, priority:int) -> bool:
+        if not streamer in self.config['streamers']:
+            self.logger.error(f"Trying to set priority for a non-existing streamer {streamer}")
+            return False
+        else:
+            self.config['streamers'][streamer]['priority_group'] = priority_group
+            self.config['streamers'][streamer]['priority'] = priority
+        return True
+
+    def add_streamer(self, streamer:dict[str,any]) -> bool:
+        """Get all streamers from configuration"""
+        # get the only key in the dict, the username
+        key = next(iter(streamer))
+        if key in self.config['streamers']:
+            self.logger.error(f"Trying to add already existing streamer {key}")
+            return False
+        else:
+            self.config['streamers'][key] = streamer[key]
+        return True
+    
     def get_streamer_config(self, username: str) -> dict:
         """Get configuration for a specific streamer"""
         # keys are now the usernames, following line is commented out
