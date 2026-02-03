@@ -273,12 +273,12 @@ You can also run the app using two provided script:
 Both scripts will make use of an API_KEY in the `.api_key` file if one is present. This api key is for euler signing service, and allows to increase the rate limits. You can create your free api key [here](https://www.eulerstream.com/dashboard).
 
 #### Using Docker
-Use the script `startDocker.sh` with -r (run) option.
+Use the script `startDocker.sh` with `-r` (run) option or `-p` (production).
 This script will build a python image and run the container, using the provided `Dockerfile`, which takes care of installing dependencies and running the app (with API_KEY if present, as described above).
 
 The script also maps the port 8000 in the container to localhost:8000, so you can see the web UI if you can access the server's 8000 port, for example with an ssh tunnel.
 
-You can show the container log running the scrio with the option `-l`, and copy saved conf files from the container to your current directory with the option `-g`.
+You can show the container log running the script with the option `-l`, and copy saved conf files from the container to your current directory with the option `-g`. Monitoring can be stopped via the Web UI or running the script with the option `-s`.
 
 
 ## 📊 Monitoring & Analytics
