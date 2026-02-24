@@ -19,7 +19,7 @@ from TikTokLive.events.proto_events import JoinEvent, LikeEvent
 from .csv_writer import CSVWriter
 from .video_handler import VideoHandler
 from utils.patches import patch_TikTokLiveClient
-from utils.system_utils import debug_breakpoint
+from utils.system_utils import debug_breakpoint, check_disk_space
 
 
 class StreamRecorder:
@@ -54,9 +54,23 @@ class StreamRecorder:
             )
             return False
 
+        # Check disk space before starting recording (default: 10GB minimum)
+        output_dir = self.config_manager.config['settings']['output_directory']
+        min_free_gb = self.config_manager.config['settings'].get('min_free_disk_space_gb', 10.0)
+        disk_info = check_disk_space(output_dir, min_free_gb)
+
+        if not disk_info.get('sufficient_space', False):
+            free_gb = disk_info.get('free_gb', 0)
+            self.logger.error(f"❌ Insufficient disk space for recording {username}: {free_gb:.2f}GB free (minimum: {min_free_gb}GB required)")
+            self.session_logger.log_session_event(
+                username, 'recording_attempt', 'failed',
+                error_message=f'Insufficient disk space: {free_gb:.2f}GB free (minimum: {min_free_gb}GB required)'
+            )
+            return False
+
         try:
             # Avoid too many simultaneous recordings since dict is not incremented until after await
-            # Consider using an asyncio.Semaphore instead of this, but the problem is that the 
+            # Consider using an asyncio.Semaphore instead of this, but the problem is that the
             # max_concurrent_recordings in the config can change, and thus the semaphore would need
             # to be recreated.
             if username not in self.active_recordings:

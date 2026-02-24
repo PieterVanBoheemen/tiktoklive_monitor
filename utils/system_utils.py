@@ -149,3 +149,62 @@ def activate_debug_breakpoint():
 def debug_breakpoint():
     if activate_breakpoint:
         breakpoint()  # This will trigger the debugger only when activate_breakpoint is True
+
+
+def check_disk_space(directory: str, min_free_gb: float = 10.0) -> Dict[str, Any]:
+    """
+    Check available disk space for a given directory
+
+    Args:
+        directory: Path to check disk space for
+        min_free_gb: Minimum free space in GB required (default: 10GB)
+
+    Returns:
+        Dict with disk space info and status
+    """
+    logger = logging.getLogger(__name__)
+    disk_info = {}
+
+    try:
+        # Get disk usage statistics
+        if platform.system() == "Windows":
+            import shutil
+            total, used, free = shutil.disk_usage(directory)
+        else:
+            stat = os.statvfs(directory)
+            total = stat.f_blocks * stat.f_frsize
+            free = stat.f_bavail * stat.f_frsize
+            used = total - free
+
+        # Convert to GB
+        total_gb = total / (1024**3)
+        used_gb = used / (1024**3)
+        free_gb = free / (1024**3)
+        used_percent = (used / total) * 100
+
+        disk_info = {
+            'total_gb': round(total_gb, 2),
+            'used_gb': round(used_gb, 2),
+            'free_gb': round(free_gb, 2),
+            'used_percent': round(used_percent, 2),
+            'min_required_gb': min_free_gb,
+            'sufficient_space': free_gb >= min_free_gb
+        }
+
+        if free_gb < min_free_gb:
+            logger.warning(f"⚠️  Low disk space: {free_gb:.2f}GB free (minimum: {min_free_gb}GB)")
+            disk_info['status'] = 'low_space'
+        elif free_gb < min_free_gb * 1.5:
+            logger.warning(f"💾 Disk space warning: {free_gb:.2f}GB free")
+            disk_info['status'] = 'warning'
+        else:
+            disk_info['status'] = 'ok'
+
+        logger.debug(f"💾 Disk space: {free_gb:.2f}GB free / {total_gb:.2f}GB total ({used_percent:.1f}% used)")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to check disk space: {e}")
+        disk_info['error'] = str(e)
+        disk_info['status'] = 'error'
+
+    return disk_info
